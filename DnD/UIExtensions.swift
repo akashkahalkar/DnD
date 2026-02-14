@@ -2,21 +2,25 @@ import SwiftUI
 
 extension Color {
     // Base Surfaces
-    static let bgPrimary = Color(hex: "#121212")     // app background
-    static let bgSecondary = Color(hex: "#1C1C1E")   // panels
-    static let bgCard = Color(hex: "#232326")        // cards
+    static let bgPrimary = Color(hex: "#0F1117")     // Primary Background
+    static let bgSecondary = Color(hex: "#151821")   // Secondary Background
+    static let bgCard = Color(hex: "#1C2130")        // Elevated Surface / Card
+    static let glassTint = Color(red: 30/255, green: 35/255, blue: 48/255, opacity: 0.55)
 
     // Accent Colors
-    static let accentGold = Color(hex: "#E6BC5C")     // Celestial Gold
-    static let accentGoldDark = Color(hex: "#99752D") // Ancient Gold
-    static let accentMagic = Color(hex: "#00D2FF")    // Arcane Blue
-    static let accentDanger = Color(hex: "#D32F2F")   // Crimson Blood
-    static let accentSuccess = Color(hex: "#4F8A5B")
+    static let accentGold = Color(hex: "#FFB84D")     // Legendary Gold
+    static let accentGoldDark = Color(hex: "#FF7A00") // For gradients
+    static let accentMagic = Color(hex: "#5CA9FF")    // Magic Blue
+    static let accentPurple = Color(hex: "#7A6CFF")   // Arcane Purple
+    static let accentNeon = Color(hex: "#5CFF9D")     // Neon Primary
+    static let accentDanger = Color(hex: "#FF5C7A")   // Danger Red
+    static let accentSuccess = Color(hex: "#4F8A5B")  // Keep existing green as fallback, or use Neon
 
     // Text Colors
-    static let textPrimary = Color(hex: "#F2F2F2")
-    static let textSecondary = Color(hex: "#C7C7CC")
-    static let textMuted = Color(hex: "#8E8E93")
+    static let textPrimary = Color(hex: "#F2F4F8")
+    static let textSecondary = Color(hex: "#B7BDCC")
+    static let textMuted = Color(hex: "#7E8599")
+    static let textDisabled = Color(hex: "#50576B")
 
     // Hex initializer
     init(hex: String) {
@@ -79,14 +83,17 @@ extension Font {
         }
     }
 
-    // Title Font (Fantasy)
-    static let fantasyTitle = Font.custom(FantasyFont.cinzel.name(weight: .bold), size: 22)
+    // Title Font (Fantasy) - Keep Cinzel for headings
+    static let fantasyTitle = Font.custom(FantasyFont.cinzel.name(weight: .bold), size: 28) // Hero
+    static let fantasyTitleMedium = Font.custom(FantasyFont.cinzel.name(weight: .bold), size: 22)
     static let fantasyTitleLarge = Font.custom(FantasyFont.cinzel.name(weight: .black), size: 32)
     static let fantasyDecorative = Font.custom(FantasyFont.cinzelDecorative.name(weight: .bold), size: 24)
     
-    // Body Font
-    static let fantasyBody = Font.custom(FantasyFont.cinzel.name(weight: .regular), size: 16)
-    static let fantasyBodyBold = Font.custom(FantasyFont.cinzel.name(weight: .bold), size: 16)
+    // Body Font - SF Pro Rounded (System)
+    static let fantasyBody = Font.system(size: 15, weight: .regular, design: .rounded)
+    static let fantasyBodyBold = Font.system(size: 15, weight: .semibold, design: .rounded)
+    static let fantasyCaption = Font.system(size: 13, weight: .regular, design: .rounded)
+    static let fantasyStat = Font.system(size: 22, weight: .bold, design: .monospaced)
     
     // Helper for custom sizes
     static func fantasy(size: CGFloat, weight: Weight = .regular, decorative: Bool = false) -> Font {
@@ -115,47 +122,65 @@ extension Font {
 
 // Glassmorphism Utility
 extension View {
-    func glassBackground(cornerRadius: CGFloat = 24) -> some View {
+    func glassBackground(cornerRadius: CGFloat = 20) -> some View {
         self.background(
             ZStack {
+                // Blur layer
                 if #available(iOS 15.0, *) {
                     RoundedRectangle(cornerRadius: cornerRadius)
                         .fill(.ultraThinMaterial)
                 } else {
                     RoundedRectangle(cornerRadius: cornerRadius)
-                        .fill(Color.bgSecondary.opacity(0.8))
+                        .fill(Color.bgSecondary.opacity(0.85))
                 }
                 
+                // Tint layer (Dark overlay 20-30%)
+                RoundedRectangle(cornerRadius: cornerRadius)
+                    .fill(Color.black.opacity(0.25))
+                
+                // Border: Subtle gradient 1px
                 RoundedRectangle(cornerRadius: cornerRadius)
                     .stroke(
                         LinearGradient(
-                            colors: [.accentGold.opacity(0.5), .clear, .accentGoldDark.opacity(0.3)],
+                            colors: [
+                                .white.opacity(0.2),
+                                .white.opacity(0.05),
+                                .white.opacity(0.02)
+                            ],
                             startPoint: .topLeading,
                             endPoint: .bottomTrailing
                         ),
-                        lineWidth: 1.5
+                        lineWidth: 1
                     )
             }
         )
-        .shadow(color: .black.opacity(0.5), radius: 10, x: 0, y: 10)
+        // Shadow: y:8 blur:30 opacity:0.25 -> radius: 30, y: 10 roughly
+        .shadow(color: .black.opacity(0.25), radius: 30, x: 0, y: 10)
     }
     
-    func ritualGlow(color: Color = .accentMagic, radius: CGFloat = 15) -> some View {
+    func ritualGlow(color: Color = .accentMagic, radius: CGFloat = 20) -> some View {
         self.shadow(color: color.opacity(0.4), radius: radius)
             .shadow(color: color.opacity(0.2), radius: radius / 2)
+            .overlay(
+                // Screen/Add blend mode simulation in SwiftUI can be tricky,
+                // often just an overlay with opacity works for simple glows
+                Color.clear
+            )
     }
     
     func etherealNoise() -> some View {
         self.overlay(
             ZStack {
-                Color.black.opacity(0.01)
+                Color.bgPrimary.opacity(0.9) // Base darkened
+                // Add noise image if available, otherwise just subtle gradient
                 LinearGradient(
-                    colors: [.clear, .white.opacity(0.03)],
+                    colors: [.clear, .accentPurple.opacity(0.05)],
                     startPoint: .top,
                     endPoint: .bottom
                 )
             }
             .blendMode(.overlay)
+            .allowsHitTesting(false)
         )
     }
 }
@@ -165,15 +190,17 @@ struct RunicCorner: View {
     var color: Color = .accentGold
     
     var body: some View {
+        // Runic corners are less emphasized in the new clean glass design,
+        // but we can keep them subtle or remove them.
+        // Spec: "Visual-first, text-light... Glass + depth + glow"
+        // It doesn't explicitly forbid runic corners, but "Clean" usually suggests less ornamentation.
+        // We will make them very subtle or keep as is for "Fantasy" flavor.
         Path { path in
             path.move(to: CGPoint(x: 0, y: size))
             path.addLine(to: CGPoint(x: 0, y: 0))
             path.addLine(to: CGPoint(x: size, y: 0))
-            
-            // Add a small rune-like dot at the corner
-            path.addEllipse(in: CGRect(x: -1, y: -1, width: 2, height: 2))
         }
-        .stroke(color, lineWidth: 1.5)
+        .stroke(color.opacity(0.6), lineWidth: 1.5)
         .frame(width: size, height: size)
     }
 }

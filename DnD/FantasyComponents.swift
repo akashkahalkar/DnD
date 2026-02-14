@@ -3,13 +3,35 @@ import SwiftUI
 // 3. Background System
 struct FantasyBackground: View {
     var body: some View {
-        LinearGradient(
-            colors: [.bgPrimary, .black],
-            startPoint: .topLeading,
-            endPoint: .bottomTrailing
-        )
-        .etherealNoise()
-        .ignoresSafeArea()
+        ZStack {
+            Color.bgPrimary.ignoresSafeArea()
+            
+            // Subtle ambient gradients
+            LinearGradient(
+                colors: [.bgPrimary, .bgSecondary],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            )
+            .ignoresSafeArea()
+            
+            // Arcane decorative glow (top left)
+            RadialGradient(
+                gradient: Gradient(colors: [.accentPurple.opacity(0.15), .clear]),
+                center: .topLeading,
+                startRadius: 0,
+                endRadius: 600
+            )
+            .ignoresSafeArea()
+            
+            // Magic decorative glow (bottom right)
+            RadialGradient(
+                gradient: Gradient(colors: [.accentMagic.opacity(0.1), .clear]),
+                center: .bottomTrailing,
+                startRadius: 0,
+                endRadius: 500
+            )
+            .ignoresSafeArea()
+        }
     }
 }
 
@@ -23,17 +45,14 @@ struct FantasyPanel<Content: View>: View {
 
     var body: some View {
         content
-            .padding(24)
-            .glassBackground(cornerRadius: 28)
-            .overlay(RunicCorner().rotationEffect(.degrees(0)).padding(8), alignment: .topLeading)
-            .overlay(RunicCorner().rotationEffect(.degrees(90)).padding(8), alignment: .topTrailing)
-            .overlay(RunicCorner().rotationEffect(.degrees(270)).padding(8), alignment: .bottomLeading)
-            .overlay(RunicCorner().rotationEffect(.degrees(180)).padding(8), alignment: .bottomTrailing)
+            .padding(20) // Card padding: 16-20
+            .glassBackground(cornerRadius: 20) // Base card radius
+            // Removed RunicCorners for the cleaner NeoGlass look
     }
 }
 
 // 5. Button System
-// Primary Button (Gold)
+// Primary Button (Legendary Gold or Neon)
 struct FantasyPrimaryButton: View {
     var title: String
     var action: () -> Void
@@ -41,14 +60,21 @@ struct FantasyPrimaryButton: View {
     var body: some View {
         Button(action: action) {
             Text(title)
-                .font(.fantasyBody)
+                .font(.fantasyBodyBold)
                 .foregroundColor(.black)
                 .padding()
                 .frame(maxWidth: .infinity)
                 .background(
-                    RoundedRectangle(cornerRadius: 14)
-                        .fill(Color.accentGold)
+                    RoundedRectangle(cornerRadius: 28) // Floating/Large button radius
+                        .fill(
+                            LinearGradient(
+                                colors: [.accentGold, .accentGoldDark],
+                                startPoint: .topLeading,
+                                endPoint: .bottomTrailing
+                            )
+                        )
                 )
+                .shadow(color: .accentGoldDark.opacity(0.4), radius: 10, x: 0, y: 5)
         }
         .scaleEffect(0.98)
     }
@@ -62,13 +88,14 @@ struct FantasySecondaryButton: View {
     var body: some View {
         Button(action: action) {
             Text(title)
-                .font(.fantasyBody)
-                .foregroundColor(.accentGold)
+                .font(.fantasyBodyBold)
+                .foregroundColor(.textPrimary)
                 .padding()
                 .frame(maxWidth: .infinity)
                 .background(
-                    RoundedRectangle(cornerRadius: 14)
-                        .stroke(Color.accentGold, lineWidth: 1)
+                    RoundedRectangle(cornerRadius: 28)
+                        .stroke(Color.textSecondary.opacity(0.3), lineWidth: 1)
+                        .background(Color.white.opacity(0.05).clipShape(RoundedRectangle(cornerRadius: 28)))
                 )
         }
     }
@@ -82,13 +109,14 @@ struct FantasyDangerButton: View {
     var body: some View {
         Button(action: action) {
             Text(title)
+                .font(.fantasyBodyBold)
                 .foregroundColor(.white)
                 .padding()
                 .frame(maxWidth: .infinity)
                 .background(
-                    RoundedRectangle(cornerRadius: 14)
-                        .fill(Color.accentDanger)
-                        .shadow(color: .accentDanger.opacity(0.7), radius: 8)
+                    RoundedRectangle(cornerRadius: 28)
+                        .fill(Color.accentDanger.opacity(0.8))
+                        .shadow(color: .accentDanger.opacity(0.4), radius: 8)
                 )
         }
     }
@@ -105,23 +133,25 @@ struct FantasyMagicButton: View {
     var body: some View {
         Button(action: action) {
             Text(title)
-                .font(.fantasyBody)
-                .foregroundColor(.white)
+                .font(.fantasyBodyBold)
+                .foregroundColor(.black)
                 .padding()
                 .frame(maxWidth: .infinity)
                 .background(
-                    RoundedRectangle(cornerRadius: 14)
-                        .fill(Color.accentMagic)
+                    RoundedRectangle(cornerRadius: 28)
+                        .fill(
+                            LinearGradient(colors: [.accentNeon, .accentMagic], startPoint: .leading, endPoint: .trailing)
+                        )
                 )
                 .shadow(
-                    color: Color.accentMagic.opacity(glow ? 0.9 : 0.3),
-                    radius: glow ? 18 : 6
+                    color: Color.accentNeon.opacity(glow ? 0.6 : 0.2),
+                    radius: glow ? 20 : 8
                 )
                 .scaleEffect(glow ? 1.02 : 1.0)
         }
         .onAppear {
             withAnimation(
-                .easeInOut(duration: 1.4)
+                .easeInOut(duration: 2.0)
                 .repeatForever(autoreverses: true)
             ) {
                 glow.toggle()
@@ -139,23 +169,24 @@ struct FantasyActionCard: View {
     var body: some View {
         VStack(spacing: 12) {
             Image(systemName: icon)
-                .font(.system(size: 28, weight: .bold))
-                .foregroundColor(isSelected ? .white : .accentMagic)
-                .shadow(color: isSelected ? .accentMagic : .clear, radius: 10)
+                .font(.system(size: 24, weight: .bold)) // SF Symbols
+                .foregroundColor(isSelected ? .accentNeon : .textSecondary)
+                .shadow(color: isSelected ? .accentNeon.opacity(0.8) : .clear, radius: 10)
 
             Text(title)
-                .font(.fantasyBodyBold)
-                .foregroundColor(.textPrimary)
+                .font(.fantasyBody)
+                .foregroundColor(isSelected ? .textPrimary : .textSecondary)
         }
         .padding()
         .frame(maxWidth: .infinity)
         .glassBackground(cornerRadius: 20)
-        .ritualGlow(color: isSelected ? .accentMagic : .clear, radius: 20)
         .overlay(
             RoundedRectangle(cornerRadius: 20)
-                .stroke(isSelected ? Color.accentMagic : Color.clear, lineWidth: 2)
+                .stroke(isSelected ? Color.accentNeon.opacity(0.6) : Color.clear, lineWidth: 1.5)
         )
-        .scaleEffect(isSelected ? 1.05 : 1.0)
+        .shadow(color: isSelected ? .accentNeon.opacity(0.2) : .clear, radius: 15)
+        .scaleEffect(isSelected ? 1.02 : 1.0)
+        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isSelected)
     }
 }
 
@@ -171,28 +202,27 @@ struct PortraitFrame: View {
             } else {
                 ZStack {
                     Color.bgCard
-                    ProgressView()
-                        .tint(.accentGold)
                     Image(systemName: "person.fill")
                         .font(.system(size: 40))
-                        .foregroundColor(.accentGold.opacity(0.1))
+                        .foregroundColor(.textMuted.opacity(0.3))
                 }
             }
         }
         .scaledToFill()
-        .frame(width: 140, height: 140)
+        .frame(width: 120, height: 120) // Slightly smaller/cleaner
+        // Actually spec says "Hero card (character)". Let's enable rounded rectangle for "Card" feel.
         .clipShape(RoundedRectangle(cornerRadius: 24))
         .overlay(
             RoundedRectangle(cornerRadius: 24)
                 .stroke(
                     LinearGradient(
-                        colors: [.accentGold, .accentGoldDark],
+                        colors: [.accentGold, .accentGoldDark.opacity(0.5)],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     ),
-                    lineWidth: 3
+                    lineWidth: 2
                 )
         )
-        .shadow(color: .accentGold.opacity(0.2), radius: 15)
+        .shadow(color: .black.opacity(0.3), radius: 10)
     }
 }
