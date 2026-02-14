@@ -8,11 +8,12 @@ struct FantasyBackground: View {
             startPoint: .topLeading,
             endPoint: .bottomTrailing
         )
+        .etherealNoise()
         .ignoresSafeArea()
     }
 }
 
-// 4. Panel Container
+// 4. Panel Container (Glass UI)
 struct FantasyPanel<Content: View>: View {
     let content: Content
 
@@ -22,16 +23,12 @@ struct FantasyPanel<Content: View>: View {
 
     var body: some View {
         content
-            .padding(16)
-            .background(
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(Color.bgSecondary)
-                    .overlay(
-                        RoundedRectangle(cornerRadius: 16)
-                            .stroke(Color.accentGold.opacity(0.3), lineWidth: 1)
-                    )
-                    .shadow(color: .black.opacity(0.6), radius: 8, x: 0, y: 6)
-            )
+            .padding(24)
+            .glassBackground(cornerRadius: 28)
+            .overlay(RunicCorner().rotationEffect(.degrees(0)).padding(8), alignment: .topLeading)
+            .overlay(RunicCorner().rotationEffect(.degrees(90)).padding(8), alignment: .topTrailing)
+            .overlay(RunicCorner().rotationEffect(.degrees(270)).padding(8), alignment: .bottomLeading)
+            .overlay(RunicCorner().rotationEffect(.degrees(180)).padding(8), alignment: .bottomTrailing)
     }
 }
 
@@ -133,57 +130,69 @@ struct FantasyMagicButton: View {
     }
 }
 
-// 6. Action Card Component
+// 6. Action Card Component (Glass UI)
 struct FantasyActionCard: View {
     var icon: String
     var title: String
+    var isSelected: Bool = false
 
     var body: some View {
         VStack(spacing: 12) {
             Image(systemName: icon)
-                .font(.system(size: 26))
-                .foregroundColor(.accentMagic)
+                .font(.system(size: 28, weight: .bold))
+                .foregroundColor(isSelected ? .white : .accentMagic)
+                .shadow(color: isSelected ? .accentMagic : .clear, radius: 10)
 
             Text(title)
-                .font(.fantasyBody)
+                .font(.fantasyBodyBold)
                 .foregroundColor(.textPrimary)
         }
         .padding()
         .frame(maxWidth: .infinity)
-        .background(
-            RoundedRectangle(cornerRadius: 16)
-                .fill(Color.bgCard)
-                .overlay(
-                    RoundedRectangle(cornerRadius: 16)
-                        .stroke(Color.accentGold.opacity(0.2))
-                )
+        .glassBackground(cornerRadius: 20)
+        .ritualGlow(color: isSelected ? .accentMagic : .clear, radius: 20)
+        .overlay(
+            RoundedRectangle(cornerRadius: 20)
+                .stroke(isSelected ? Color.accentMagic : Color.clear, lineWidth: 2)
         )
+        .scaleEffect(isSelected ? 1.05 : 1.0)
     }
 }
 
-// 7. Portrait Frame
+// 7. Portrait Frame (Mythic)
 struct PortraitFrame: View {
-    var image: String // Changed to String for easy asset reference or systemName fallback
+    var image: UIImage?
 
     var body: some View {
         Group {
-            if let uiImage = UIImage(named: image) {
+            if let uiImage = image {
                 Image(uiImage: uiImage)
                     .resizable()
             } else {
-                Image(systemName: "person.fill")
-                    .resizable()
-                    .padding(20)
-                    .background(Color.bgCard)
+                ZStack {
+                    Color.bgCard
+                    ProgressView()
+                        .tint(.accentGold)
+                    Image(systemName: "person.fill")
+                        .font(.system(size: 40))
+                        .foregroundColor(.accentGold.opacity(0.1))
+                }
             }
         }
         .scaledToFill()
-        .frame(width: 120, height: 120)
-        .clipShape(RoundedRectangle(cornerRadius: 16))
+        .frame(width: 140, height: 140)
+        .clipShape(RoundedRectangle(cornerRadius: 24))
         .overlay(
-            RoundedRectangle(cornerRadius: 16)
-                .stroke(Color.accentGold, lineWidth: 2)
+            RoundedRectangle(cornerRadius: 24)
+                .stroke(
+                    LinearGradient(
+                        colors: [.accentGold, .accentGoldDark],
+                        startPoint: .topLeading,
+                        endPoint: .bottomTrailing
+                    ),
+                    lineWidth: 3
+                )
         )
-        .shadow(color: .black.opacity(0.7), radius: 8)
+        .shadow(color: .accentGold.opacity(0.2), radius: 15)
     }
 }

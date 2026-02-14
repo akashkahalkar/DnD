@@ -7,10 +7,11 @@ extension Color {
     static let bgCard = Color(hex: "#232326")        // cards
 
     // Accent Colors
-    static let accentGold = Color(hex: "#C8A75B")     // primary interaction
-    static let accentMagic = Color(hex: "#4DA3FF")    // magic/spells
-    static let accentDanger = Color(hex: "#B0413E")   // danger
-    static let accentSuccess = Color(hex: "#4F8A5B")  // success/heal
+    static let accentGold = Color(hex: "#E6BC5C")     // Celestial Gold
+    static let accentGoldDark = Color(hex: "#99752D") // Ancient Gold
+    static let accentMagic = Color(hex: "#00D2FF")    // Arcane Blue
+    static let accentDanger = Color(hex: "#D32F2F")   // Crimson Blood
+    static let accentSuccess = Color(hex: "#4F8A5B")
 
     // Text Colors
     static let textPrimary = Color(hex: "#F2F2F2")
@@ -109,5 +110,70 @@ extension Font {
                 }
             }
         }
+    }
+}
+
+// Glassmorphism Utility
+extension View {
+    func glassBackground(cornerRadius: CGFloat = 24) -> some View {
+        self.background(
+            ZStack {
+                if #available(iOS 15.0, *) {
+                    RoundedRectangle(cornerRadius: cornerRadius)
+                        .fill(.ultraThinMaterial)
+                } else {
+                    RoundedRectangle(cornerRadius: cornerRadius)
+                        .fill(Color.bgSecondary.opacity(0.8))
+                }
+                
+                RoundedRectangle(cornerRadius: cornerRadius)
+                    .stroke(
+                        LinearGradient(
+                            colors: [.accentGold.opacity(0.5), .clear, .accentGoldDark.opacity(0.3)],
+                            startPoint: .topLeading,
+                            endPoint: .bottomTrailing
+                        ),
+                        lineWidth: 1.5
+                    )
+            }
+        )
+        .shadow(color: .black.opacity(0.5), radius: 10, x: 0, y: 10)
+    }
+    
+    func ritualGlow(color: Color = .accentMagic, radius: CGFloat = 15) -> some View {
+        self.shadow(color: color.opacity(0.4), radius: radius)
+            .shadow(color: color.opacity(0.2), radius: radius / 2)
+    }
+    
+    func etherealNoise() -> some View {
+        self.overlay(
+            ZStack {
+                Color.black.opacity(0.01)
+                LinearGradient(
+                    colors: [.clear, .white.opacity(0.03)],
+                    startPoint: .top,
+                    endPoint: .bottom
+                )
+            }
+            .blendMode(.overlay)
+        )
+    }
+}
+
+struct RunicCorner: View {
+    var size: CGFloat = 12
+    var color: Color = .accentGold
+    
+    var body: some View {
+        Path { path in
+            path.move(to: CGPoint(x: 0, y: size))
+            path.addLine(to: CGPoint(x: 0, y: 0))
+            path.addLine(to: CGPoint(x: size, y: 0))
+            
+            // Add a small rune-like dot at the corner
+            path.addEllipse(in: CGRect(x: -1, y: -1, width: 2, height: 2))
+        }
+        .stroke(color, lineWidth: 1.5)
+        .frame(width: size, height: size)
     }
 }
