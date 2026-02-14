@@ -405,7 +405,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 27PPL57PWC;
+				DEVELOPMENT_TEAM = 2BMUKRTSZ6;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_UIAppFonts = "Cinzel-Black.ttf Cinzel-Bold.ttf Cinzel-Regular.ttf CinzelDecorative-Black.ttf CinzelDecorative-Bold.ttf CinzelDecorative-Regular.ttf";
@@ -421,7 +421,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = personal.akash.app.DnD;
+				PRODUCT_BUNDLE_IDENTIFIER = personal.akash.app.dnd.game;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;
@@ -440,7 +440,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 1;
-				DEVELOPMENT_TEAM = 27PPL57PWC;
+				DEVELOPMENT_TEAM = 2BMUKRTSZ6;
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_UIAppFonts = "Cinzel-Black.ttf Cinzel-Bold.ttf Cinzel-Regular.ttf CinzelDecorative-Black.ttf CinzelDecorative-Bold.ttf CinzelDecorative-Regular.ttf";
@@ -456,7 +456,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 1.0;
-				PRODUCT_BUNDLE_IDENTIFIER = personal.akash.app.DnD;
+				PRODUCT_BUNDLE_IDENTIFIER = personal.akash.app.dnd.game;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				STRING_CATALOG_GENERATE_SYMBOLS = YES;
 				SWIFT_APPROACHABLE_CONCURRENCY = YES;

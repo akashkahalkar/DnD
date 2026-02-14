@@ -103,20 +103,24 @@ extension Font {
 
     // Register custom fonts from the app bundle
     static func setupFonts() {
+        StartupDiagnostics.mark("Font registration begin")
         let fontFiles = [
             "Cinzel-Black.ttf", "Cinzel-Bold.ttf", "Cinzel-Regular.ttf",
             "CinzelDecorative-Black.ttf", "CinzelDecorative-Bold.ttf", "CinzelDecorative-Regular.ttf"
         ]
         
-        for file in fontFiles {
-            if let url = Bundle.main.url(forResource: file, withExtension: nil) {
-                var error: Unmanaged<CFError>?
-                if !CTFontManagerRegisterFontsForURL(url as CFURL, .process, &error) {
-                    let errorDescription = error?.takeRetainedValue().localizedDescription ?? "Unknown error"
-                    print("⚠️ Fantasy UI: Failed to register font (\(file)): \(errorDescription)")
+        StartupDiagnostics.timed("Font registration work") {
+            for file in fontFiles {
+                if let url = Bundle.main.url(forResource: file, withExtension: nil) {
+                    var error: Unmanaged<CFError>?
+                    if !CTFontManagerRegisterFontsForURL(url as CFURL, .process, &error) {
+                        let errorDescription = error?.takeRetainedValue().localizedDescription ?? "Unknown error"
+                        print("⚠️ Fantasy UI: Failed to register font (\(file)): \(errorDescription)")
+                    }
                 }
             }
         }
+        StartupDiagnostics.mark("Font registration end")
     }
 }
 

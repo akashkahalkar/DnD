@@ -10,10 +10,8 @@ import SwiftUI
 struct ContentView: View {
     var body: some View {
         FantasyLayoutWrapper {
-            // This is where we would switch views based on the selected tab index passed down
-            // or use a TabView logic inside LayoutWrapper.
-            // For now, we display the main BattleScreen as the primary content.
-            BattleScreen()
+            // Switch to NarrativeTestView for testing story generation
+            NarrativeTestView()
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }
