@@ -6,15 +6,6 @@
 	objectVersion = 77;
 	objects = {
 
-/* Begin PBXBuildFile section */
-		3872B0012F3D990C0041C225 /* DnD/Fonts/Cinzel/Cinzel-Black.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 3872F0012F3D990C0041C225 /* DnD/Fonts/Cinzel/Cinzel-Black.ttf */; };
-		3872B0022F3D990C0041C225 /* DnD/Fonts/Cinzel/Cinzel-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 3872F0022F3D990C0041C225 /* DnD/Fonts/Cinzel/Cinzel-Bold.ttf */; };
-		3872B0032F3D990C0041C225 /* DnD/Fonts/Cinzel/Cinzel-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 3872F0032F3D990C0041C225 /* DnD/Fonts/Cinzel/Cinzel-Regular.ttf */; };
-		3872B0042F3D990C0041C225 /* DnD/Fonts/Cinzel_Decorative/CinzelDecorative-Black.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 3872F0042F3D990C0041C225 /* DnD/Fonts/Cinzel_Decorative/CinzelDecorative-Black.ttf */; };
-		3872B0052F3D990C0041C225 /* DnD/Fonts/Cinzel_Decorative/CinzelDecorative-Bold.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 3872F0052F3D990C0041C225 /* DnD/Fonts/Cinzel_Decorative/CinzelDecorative-Bold.ttf */; };
-		3872B0062F3D990C0041C225 /* DnD/Fonts/Cinzel_Decorative/CinzelDecorative-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 3872F0062F3D990C0041C225 /* DnD/Fonts/Cinzel_Decorative/CinzelDecorative-Regular.ttf */; };
-/* End PBXBuildFile section */
-
 /* Begin PBXContainerItemProxy section */
 		38552A622F3E054C000CD738 /* PBXContainerItemProxy */ = {
 			isa = PBXContainerItemProxy;
@@ -28,12 +19,6 @@
 /* Begin PBXFileReference section */
 		38552A5E2F3E054C000CD738 /* DnDTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = DnDTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		3872CC022F3D990C0041C225 /* DnD.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = DnD.app; sourceTree = BUILT_PRODUCTS_DIR; };
-		3872F0012F3D990C0041C225 /* DnD/Fonts/Cinzel/Cinzel-Black.ttf */ = {isa = PBXFileReference; lastKnownFileType = file.font.ttf; path = "DnD/Fonts/Cinzel/Cinzel-Black.ttf"; sourceTree = "<group>"; };
-		3872F0022F3D990C0041C225 /* DnD/Fonts/Cinzel/Cinzel-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file.font.ttf; path = "DnD/Fonts/Cinzel/Cinzel-Bold.ttf"; sourceTree = "<group>"; };
-		3872F0032F3D990C0041C225 /* DnD/Fonts/Cinzel/Cinzel-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file.font.ttf; path = "DnD/Fonts/Cinzel/Cinzel-Regular.ttf"; sourceTree = "<group>"; };
-		3872F0042F3D990C0041C225 /* DnD/Fonts/Cinzel_Decorative/CinzelDecorative-Black.ttf */ = {isa = PBXFileReference; lastKnownFileType = file.font.ttf; path = "DnD/Fonts/Cinzel_Decorative/CinzelDecorative-Black.ttf"; sourceTree = "<group>"; };
-		3872F0052F3D990C0041C225 /* DnD/Fonts/Cinzel_Decorative/CinzelDecorative-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file.font.ttf; path = "DnD/Fonts/Cinzel_Decorative/CinzelDecorative-Bold.ttf"; sourceTree = "<group>"; };
-		3872F0062F3D990C0041C225 /* DnD/Fonts/Cinzel_Decorative/CinzelDecorative-Regular.ttf */ = {isa = PBXFileReference; lastKnownFileType = file.font.ttf; path = "DnD/Fonts/Cinzel_Decorative/CinzelDecorative-Regular.ttf"; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -70,12 +55,6 @@
 		385529BB2F3DA197000CD738 /* Recovered References */ = {
 			isa = PBXGroup;
 			children = (
-				3872F0012F3D990C0041C225 /* DnD/Fonts/Cinzel/Cinzel-Black.ttf */,
-				3872F0022F3D990C0041C225 /* DnD/Fonts/Cinzel/Cinzel-Bold.ttf */,
-				3872F0032F3D990C0041C225 /* DnD/Fonts/Cinzel/Cinzel-Regular.ttf */,
-				3872F0042F3D990C0041C225 /* DnD/Fonts/Cinzel_Decorative/CinzelDecorative-Black.ttf */,
-				3872F0052F3D990C0041C225 /* DnD/Fonts/Cinzel_Decorative/CinzelDecorative-Bold.ttf */,
-				3872F0062F3D990C0041C225 /* DnD/Fonts/Cinzel_Decorative/CinzelDecorative-Regular.ttf */,
 			);
 			name = "Recovered References";
 			sourceTree = "<group>";
@@ -198,12 +177,6 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				3872B0012F3D990C0041C225 /* DnD/Fonts/Cinzel/Cinzel-Black.ttf in Resources */,
-				3872B0022F3D990C0041C225 /* DnD/Fonts/Cinzel/Cinzel-Bold.ttf in Resources */,
-				3872B0032F3D990C0041C225 /* DnD/Fonts/Cinzel/Cinzel-Regular.ttf in Resources */,
-				3872B0042F3D990C0041C225 /* DnD/Fonts/Cinzel_Decorative/CinzelDecorative-Black.ttf in Resources */,
-				3872B0052F3D990C0041C225 /* DnD/Fonts/Cinzel_Decorative/CinzelDecorative-Bold.ttf in Resources */,
-				3872B0062F3D990C0041C225 /* DnD/Fonts/Cinzel_Decorative/CinzelDecorative-Regular.ttf in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
