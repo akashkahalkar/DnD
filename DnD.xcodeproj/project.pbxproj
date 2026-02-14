@@ -15,7 +15,18 @@
 		3872B0062F3D990C0041C225 /* DnD/Fonts/Cinzel_Decorative/CinzelDecorative-Regular.ttf in Resources */ = {isa = PBXBuildFile; fileRef = 3872F0062F3D990C0041C225 /* DnD/Fonts/Cinzel_Decorative/CinzelDecorative-Regular.ttf */; };
 /* End PBXBuildFile section */
 
+/* Begin PBXContainerItemProxy section */
+		38552A622F3E054C000CD738 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 3872CBFA2F3D990B0041C225 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = 3872CC012F3D990B0041C225;
+			remoteInfo = DnD;
+		};
+/* End PBXContainerItemProxy section */
+
 /* Begin PBXFileReference section */
+		38552A5E2F3E054C000CD738 /* DnDTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = DnDTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		3872CC022F3D990C0041C225 /* DnD.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = DnD.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		3872F0012F3D990C0041C225 /* DnD/Fonts/Cinzel/Cinzel-Black.ttf */ = {isa = PBXFileReference; lastKnownFileType = file.font.ttf; path = "DnD/Fonts/Cinzel/Cinzel-Black.ttf"; sourceTree = "<group>"; };
 		3872F0022F3D990C0041C225 /* DnD/Fonts/Cinzel/Cinzel-Bold.ttf */ = {isa = PBXFileReference; lastKnownFileType = file.font.ttf; path = "DnD/Fonts/Cinzel/Cinzel-Bold.ttf"; sourceTree = "<group>"; };
@@ -26,6 +37,11 @@
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
+		38552A5F2F3E054C000CD738 /* DnDTests */ = {
+			isa = PBXFileSystemSynchronizedRootGroup;
+			path = DnDTests;
+			sourceTree = "<group>";
+		};
 		3872CC042F3D990C0041C225 /* DnD */ = {
 			isa = PBXFileSystemSynchronizedRootGroup;
 			path = DnD;
@@ -34,6 +50,13 @@
 /* End PBXFileSystemSynchronizedRootGroup section */
 
 /* Begin PBXFrameworksBuildPhase section */
+		38552A5B2F3E054C000CD738 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		3872CBFF2F3D990B0041C225 /* Frameworks */ = {
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
@@ -61,6 +84,7 @@
 			isa = PBXGroup;
 			children = (
 				3872CC042F3D990C0041C225 /* DnD */,
+				38552A5F2F3E054C000CD738 /* DnDTests */,
 				3872CC032F3D990C0041C225 /* Products */,
 				385529BB2F3DA197000CD738 /* Recovered References */,
 			);
@@ -70,6 +94,7 @@
 			isa = PBXGroup;
 			children = (
 				3872CC022F3D990C0041C225 /* DnD.app */,
+				38552A5E2F3E054C000CD738 /* DnDTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -77,6 +102,29 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		38552A5D2F3E054C000CD738 /* DnDTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 38552A642F3E054C000CD738 /* Build configuration list for PBXNativeTarget "DnDTests" */;
+			buildPhases = (
+				38552A5A2F3E054C000CD738 /* Sources */,
+				38552A5B2F3E054C000CD738 /* Frameworks */,
+				38552A5C2F3E054C000CD738 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				38552A632F3E054C000CD738 /* PBXTargetDependency */,
+			);
+			fileSystemSynchronizedGroups = (
+				38552A5F2F3E054C000CD738 /* DnDTests */,
+			);
+			name = DnDTests;
+			packageProductDependencies = (
+			);
+			productName = DnDTests;
+			productReference = 38552A5E2F3E054C000CD738 /* DnDTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 		3872CC012F3D990B0041C225 /* DnD */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 3872CC0D2F3D990D0041C225 /* Build configuration list for PBXNativeTarget "DnD" */;
@@ -109,6 +157,10 @@
 				LastSwiftUpdateCheck = 2620;
 				LastUpgradeCheck = 2620;
 				TargetAttributes = {
+					38552A5D2F3E054C000CD738 = {
+						CreatedOnToolsVersion = 26.2;
+						TestTargetID = 3872CC012F3D990B0041C225;
+					};
 					3872CC012F3D990B0041C225 = {
 						CreatedOnToolsVersion = 26.2;
 					};
@@ -129,11 +181,19 @@
 			projectRoot = "";
 			targets = (
 				3872CC012F3D990B0041C225 /* DnD */,
+				38552A5D2F3E054C000CD738 /* DnDTests */,
 			);
 		};
 /* End PBXProject section */
 
 /* Begin PBXResourcesBuildPhase section */
+		38552A5C2F3E054C000CD738 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		3872CC002F3D990B0041C225 /* Resources */ = {
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -150,6 +210,13 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		38552A5A2F3E054C000CD738 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		3872CBFE2F3D990B0041C225 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -159,7 +226,57 @@
 		};
 /* End PBXSourcesBuildPhase section */
 
+/* Begin PBXTargetDependency section */
+		38552A632F3E054C000CD738 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = 3872CC012F3D990B0041C225 /* DnD */;
+			targetProxy = 38552A622F3E054C000CD738 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
 /* Begin XCBuildConfiguration section */
+		38552A652F3E054C000CD738 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 27PPL57PWC;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = personal.akash.app.DnDTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/DnD.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/DnD";
+			};
+			name = Debug;
+		};
+		38552A662F3E054C000CD738 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				DEVELOPMENT_TEAM = 27PPL57PWC;
+				GENERATE_INFOPLIST_FILE = YES;
+				MARKETING_VERSION = 1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = personal.akash.app.DnDTests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				STRING_CATALOG_GENERATE_SYMBOLS = NO;
+				SWIFT_APPROACHABLE_CONCURRENCY = YES;
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_UPCOMING_FEATURE_MEMBER_IMPORT_VISIBILITY = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/DnD.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/DnD";
+			};
+			name = Release;
+		};
 		3872CC0B2F3D990D0041C225 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -354,6 +471,15 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
+		38552A642F3E054C000CD738 /* Build configuration list for PBXNativeTarget "DnDTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				38552A652F3E054C000CD738 /* Debug */,
+				38552A662F3E054C000CD738 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
 		3872CBFD2F3D990B0041C225 /* Build configuration list for PBXProject "DnD" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
