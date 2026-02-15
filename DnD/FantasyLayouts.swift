@@ -18,7 +18,7 @@ struct FantasyLayoutWrapper<Content: View>: View {
             if horizontalSizeClass == .regular {
                 // IPAD / DESKTOP LAYOUT (Sidebar)
                 HStack(spacing: 0) {
-                    FantasySidebar(selectedTab: $selectedTab)
+                    //FantasySidebar(selectedTab: $selectedTab)
                     
                     ZStack {
                         // Main Content Area
@@ -34,7 +34,7 @@ struct FantasyLayoutWrapper<Content: View>: View {
                     
                     VStack {
                         Spacer()
-                        FantasyTabBar(selectedTab: $selectedTab)
+                        //FantasyTabBar(selectedTab: $selectedTab)
                     }
                 }
             }
