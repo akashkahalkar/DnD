@@ -12,12 +12,16 @@ class NarrativeOrchestrator {
         aiClient.resetSession()
         
         let basePrompt = """
-        You are a Dungeon Master for a mythical RPG. 
-        The player is \(player.name) with \(player.hp) HP.
-        Current scene turn number: \(turnNumber).
-        This is the opening scene of the adventure.
-        Start a new adventure in a dark, atmospheric mythical setting.
-        Output MUST be in JSON format matching the schema provided.
+        GAME_CONTEXT
+        - session_phase: opening_scene
+        \(buildPlayerContext(player: player))
+        - turn_number: \(turnNumber)
+        - target_session_length_turns: 10-15
+        - previous_scene: none
+        - previous_choice: none
+        
+        TASK
+        - Start a new dark-fantasy adventure.
         """
         
         let response = try await aiClient.generateStory(prompt: basePrompt)
@@ -27,11 +31,16 @@ class NarrativeOrchestrator {
     
     func processPlayerChoice(choice: String, player: Player, turnNumber: Int) async throws -> StoryResponse {
         let prompt = """
-        The player chose: "\(choice)".
-        Current scene turn number: \(turnNumber).
-        Current Player HP: \(player.hp).
-        Continue the story based on this choice.
-        Output MUST be in JSON format.
+        GAME_CONTEXT
+        - session_phase: ongoing_scene
+        \(buildPlayerContext(player: player))
+        - turn_number: \(turnNumber)
+        \(buildPreviousStoryContext())
+        - previous_choice: \(quoted(choice))
+        \(player.hp <= 0 ? "- hard_rule: player_hp_is_zero => is_game_over_must_be_true" : "")
+        
+        TASK
+        - Continue the story based on previous choice and current state.
         """
         
         let response = try await aiClient.generateStory(prompt: prompt)
@@ -45,7 +54,6 @@ class NarrativeOrchestrator {
         let dc = Int.random(in: 10...20)
         let isSuccess = rollResult.total >= dc
         let hpChange: Int
-        let outcomeDescription: String
         hpChange = isSuccess ? 0 : -5
         return (hpChange, dc, isSuccess)
     }
@@ -60,21 +68,28 @@ class NarrativeOrchestrator {
         hpChange: Int,
         outcomeDescription: String
     ) async throws -> StoryResponse {
-        // Generate Prompt context based on known outcome
-        let damageContext = hpChange < 0 ? "The player took \(abs(hpChange)) damage." : ""
-        let rollContext = "Player rolled \(rollResult.total) (d20: \(rollResult.roll) + \(rollResult.bonus)) against DC \(dc)."
+        // Generate compact structured context based on known outcome.
+        let rollOutcome = hpChange < 0 ? "damage_\(abs(hpChange))" : "no_damage"
         
         let prompt = """
-        The player chose: "\(choice)".
-        Current scene turn number: \(turnNumber).
-        \(rollContext)
-        \(outcomeDescription)
-        \(damageContext)
+        GAME_CONTEXT
+        - session_phase: post_roll_resolution
+        \(buildPlayerContext(player: player))
+        - turn_number: \(turnNumber)
+        \(buildPreviousStoryContext())
+        - previous_choice: \(quoted(choice))
+        - resolved_roll:
+          - d20: \(rollResult.roll)
+          - modifier: \(rollResult.bonus)
+          - total: \(rollResult.total)
+          - dc: \(dc)
+          - outcome: \(quoted(outcomeDescription))
+          - consequence: \(rollOutcome)
+        \(player.hp <= 0 ? "- hard_rule: player_hp_is_zero => is_game_over_must_be_true" : "")
         
-        Current Player HP: \(player.hp).
-        Continue the story based on this choice and the roll outcome.
-        Make the consequences of the roll clear in the narrative.
-        Output MUST be in JSON format.
+        TASK
+        - Continue the story based on resolved roll outcome and updated state.
+        - Make roll consequences clear in scene description and choices.
         """
         
         let response = try await aiClient.generateStory(prompt: prompt)
@@ -113,5 +128,50 @@ class NarrativeOrchestrator {
             return 0
         }
         return player.abilityModifier(for: abilityType)
+    }
+    
+    private func buildPlayerContext(player: Player) -> String {
+        """
+        - player:
+          - name: \(quoted(player.name))
+          - hp: \(player.hp)
+          - max_hp: \(player.maxHP)
+          - ability_scores:
+            - strength: \(player.abilityScore(for: .strength))
+            - dexterity: \(player.abilityScore(for: .dexterity))
+            - constitution: \(player.abilityScore(for: .constitution))
+            - intelligence: \(player.abilityScore(for: .intelligence))
+            - wisdom: \(player.abilityScore(for: .wisdom))
+            - charisma: \(player.abilityScore(for: .charisma))
+          - inventory: \(player.inventory.isEmpty ? "[]" : "[" + player.inventory.map { quoted($0) }.joined(separator: ", ") + "]")
+        """
+    }
+    
+    private func buildPreviousStoryContext() -> String {
+        guard let story = currentStory else {
+            return "- previous_scene: none"
+        }
+        
+        let sceneExcerpt = compact(story.sceneDescription, maxCharacters: 220)
+        let priorChoices = story.choices.prefix(3).map { quoted($0) }.joined(separator: ", ")
+        let rollRequirement = story.requiresRoll ?? "none"
+        
+        return """
+        - previous_scene:
+          - scene_excerpt: \(quoted(sceneExcerpt))
+          - prior_choices: [\(priorChoices)]
+          - required_roll: \(quoted(rollRequirement))
+          - is_combat: \(story.isCombat ?? false)
+          - is_game_over: \(story.isGameOver ?? false)
+        """
+    }
+    
+    private func compact(_ text: String, maxCharacters: Int) -> String {
+        if text.count <= maxCharacters { return text }
+        return String(text.prefix(maxCharacters)) + "..."
+    }
+    
+    private func quoted(_ text: String) -> String {
+        "\"\(text.replacingOccurrences(of: "\"", with: "\\\""))\""
     }
 }

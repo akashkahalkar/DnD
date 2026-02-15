@@ -69,42 +69,71 @@ class LLMClient: AIClientProtocol {
             
             // Create or reuse session for conversation context
             if session == nil {
-                session = LanguageModelSession(model: model)
+                session = LanguageModelSession(
+                    model: model,
+                    instructions: buildDungeonMasterInstructions()
+                )
             }
             
             guard let languageSession = session as? LanguageModelSession else {
                 throw LLMError.modelUnavailable
             }
             
-            // Build the full prompt with system instructions and JSON schema
+            // Prompt carries per-turn context; session instructions define global behavior.
             let fullPrompt = buildDungeonMasterPrompt(userPrompt: prompt)
             
-            
-            // Generate response with guided output
-            let response = try await languageSession.respond(to: fullPrompt)
-            
-            // Parse the response as JSON
-            guard let jsonData = response.content.data(using: .utf8) else {
-                throw LLMError.invalidResponse
-            }
+            let response: LanguageModelSession.Response<GuidedStoryResponse>
             do {
-                let storyResponse = try JSONDecoder().decode(StoryResponse.self, from: jsonData)
-                let elapsed = ProcessInfo.processInfo.systemUptime - operationStart
-                let formatted = String(format: "%.3f", elapsed)
-                StartupDiagnostics.mark("Foundation model generation decoded in \(formatted)s")
-                return storyResponse
-            } catch {
-                // If JSON parsing fails, try to extract JSON from markdown code blocks
-                let cleanedJSON = extractJSON(from: response.content)
-                guard let cleanedData = cleanedJSON.data(using: .utf8) else {
-                    throw LLMError.decodingError("Could not extract valid JSON from response")
+                response = try await languageSession.respond(
+                    to: fullPrompt,
+                    generating: GuidedStoryResponse.self,
+                    includeSchemaInPrompt: true
+                )
+            } catch let generationError as LanguageModelSession.GenerationError {
+                switch generationError {
+                case .exceededContextWindowSize(let context):
+                    StartupDiagnostics.mark("Foundation model context window exceeded: \(context.debugDescription)")
+                    logTranscriptDiagnostics(languageSession.transcript, label: "before trim")
+                    
+                    let trimmedSession = rebuildSessionWithTrimmedTranscript(
+                        from: languageSession,
+                        model: model,
+                        keepRecentNonInstructionEntries: 4
+                    )
+                    session = trimmedSession
+                    logTranscriptDiagnostics(trimmedSession.transcript, label: "after trim")
+                    
+                    do {
+                        response = try await trimmedSession.respond(
+                            to: fullPrompt,
+                            generating: GuidedStoryResponse.self,
+                            includeSchemaInPrompt: true
+                        )
+                    } catch {
+                        // If still failing, try a total reset (instructions only)
+                        StartupDiagnostics.mark("Context window still exceeded after trim. Total reset.")
+                        let resetSession = rebuildSessionWithTrimmedTranscript(
+                            from: languageSession,
+                            model: model,
+                            keepRecentNonInstructionEntries: 0
+                        )
+                        session = resetSession
+                        response = try await resetSession.respond(
+                            to: fullPrompt,
+                            generating: GuidedStoryResponse.self,
+                            includeSchemaInPrompt: true
+                        )
+                    }
+                default:
+                    throw generationError
                 }
-                let storyResponse = try JSONDecoder().decode(StoryResponse.self, from: cleanedData)
-                let elapsed = ProcessInfo.processInfo.systemUptime - operationStart
-                let formatted = String(format: "%.3f", elapsed)
-                StartupDiagnostics.mark("Foundation model generation decoded after cleanup in \(formatted)s")
-                return storyResponse
             }
+            
+            let storyResponse = response.content.toStoryResponse()
+            let elapsed = ProcessInfo.processInfo.systemUptime - operationStart
+            let formatted = String(format: "%.3f", elapsed)
+            StartupDiagnostics.mark("Foundation model guided generation completed in \(formatted)s")
+            return storyResponse
         } catch {
             StartupDiagnostics.mark("Foundation model error: \(error.localizedDescription). Falling back to mock")
             return try await generateMockStory(prompt: prompt)
@@ -116,72 +145,93 @@ class LLMClient: AIClientProtocol {
     
     // MARK: - Helper Methods
     
-    private func buildDungeonMasterPrompt(userPrompt: String) -> String {
-        return """
-        You are an expert Dungeon Master for a dark fantasy RPG in the style of Dungeons & Dragons.
-        Your role is to create immersive, atmospheric narrative experiences.
-        
-        CRITICAL: You MUST respond with ONLY valid JSON matching this exact schema:
-        {
-          "scene_description": "A vivid description of the current scene (2-3 sentences)",
-          "npc_dialogue": [
-            {
-              "speaker": "NPC Name",
-              "line": "What the NPC says"
-            }
-          ],
-          "choices": [
-            "First player choice",
-            "Second player choice",
-            "Third player choice"
-          ],
-          "requires_roll": "ability_name or null"
-        
-        }
-        
-        Rules:
-        - scene_description: Atmospheric, sensory-rich description
-        - npc_dialogue: Array of 0-2 NPC dialogue objects (can be empty)
-        - choices: Exactly 3 meaningful player choices
-        - requires_roll: One of ["strength", "dexterity", "constitution", "intelligence", "wisdom", "charisma", null]
-        - IMPORTANT: Prefer deterministic storytelling. Set requires_roll to null by default.
-        - Roll frequency target: roughly 1 roll every 3-4 scenes, not every scene.
-        - Respect scene turn context provided in User Context.
-        - If scene turn number is 1, requires_roll should be null unless there is an exceptional immediate high-stakes event.
-        - Use a roll ONLY when all are true:
-          1) The action is uncertain,
-          2) Failure has meaningful consequences,
-          3) The moment is high-stakes or dramatic.
-        - No roll if: action is routine, exploratory, conversational, low-stakes, or can be reasonably resolved by narration.
-        - If unsure, choose null.
-        - The opening scene should almost always use requires_roll: null.
-        - Use dark fantasy tone, tactical choices, and mythical elements
-        - Keep descriptions concise but evocative
-        
-        User Context:
-        \(userPrompt)
-        
-        Respond with ONLY the JSON object, no additional text or markdown formatting.
+    private func buildDungeonMasterInstructions() -> String {
+        """
+        Expert DM for dark fantasy RPG. concise response.
+        - Give 3 choices.
+        - requires_roll: nil by default. Use only for high stakes (1 in 4 scenes).
+        - is_combat: only for active battle.
+        - Tone: Atmospheric, tactical.
         """
     }
     
-    private func extractJSON(from text: String) -> String {
-        // Try to extract JSON from markdown code blocks
-        if let range = text.range(of: "```json\\s*\\n", options: .regularExpression) {
-            var jsonText = String(text[range.upperBound...])
-            if let endRange = jsonText.range(of: "```") {
-                jsonText = String(jsonText[..<endRange.lowerBound])
+    private func buildDungeonMasterPrompt(userPrompt: String) -> String {
+        return """
+        Generate the next story scene using this current game context:
+        \(userPrompt)
+        """
+    }
+    
+    @available(iOS 26.0, *)
+    private func rebuildSessionWithTrimmedTranscript(
+        from currentSession: LanguageModelSession,
+        model: SystemLanguageModel,
+        keepRecentNonInstructionEntries: Int = 4
+    ) -> LanguageModelSession {
+        let allEntries = Array(currentSession.transcript)
+        let instructionEntry = allEntries.last(where: { entry in
+            if case .instructions = entry { return true }
+            return false
+        })
+        
+        let nonInstructionEntries = allEntries.filter { entry in
+            if case .instructions = entry { return false }
+            return true
+        }
+        
+        var rebuiltEntries: [Transcript.Entry] = []
+        if let instructionEntry {
+            rebuiltEntries.append(instructionEntry)
+        } else {
+            // Fallback safeguard: preserve base instructions if transcript has no instruction entry.
+            rebuiltEntries.append(
+                .instructions(
+                    Transcript.Instructions(
+                        segments: [.text(.init(content: buildDungeonMasterInstructions()))],
+                        toolDefinitions: []
+                    )
+                )
+            )
+        }
+        
+        rebuiltEntries.append(contentsOf: nonInstructionEntries.suffix(keepRecentNonInstructionEntries))
+        let trimmedTranscript = Transcript(entries: rebuiltEntries)
+        
+        return LanguageModelSession(model: model, transcript: trimmedTranscript)
+    }
+    
+    @available(iOS 26.0, *)
+    private func logTranscriptDiagnostics(_ transcript: Transcript, label: String) {
+        var instructionCount = 0
+        var promptCount = 0
+        var responseCount = 0
+        var toolCallCount = 0
+        var toolOutputCount = 0
+        var approxCharCount = 0
+        
+        for entry in transcript {
+            let description = String(describing: entry)
+            approxCharCount += description.count
+            
+            switch entry {
+            case .instructions:
+                instructionCount += 1
+            case .prompt:
+                promptCount += 1
+            case .response:
+                responseCount += 1
+            case .toolCalls:
+                toolCallCount += 1
+            case .toolOutput:
+                toolOutputCount += 1
+            @unknown default:
+                fatalError()
             }
-            return jsonText.trimmingCharacters(in: .whitespacesAndNewlines)
         }
         
-        // Try to find raw JSON object
-        if let startIndex = text.firstIndex(of: "{"),
-           let endIndex = text.lastIndex(of: "}") {
-            return String(text[startIndex...endIndex])
-        }
-        
-        return text
+        StartupDiagnostics.mark(
+            "Transcript \(label): entries=\(transcript.count), approxChars=\(approxCharCount), instructions=\(instructionCount), prompts=\(promptCount), responses=\(responseCount), toolCalls=\(toolCallCount), toolOutput=\(toolOutputCount)"
+        )
     }
     
     // MARK: - Mock Implementation (Fallback)
@@ -222,7 +272,9 @@ class LLMClient: AIClientProtocol {
             "Demand more information about the ruins",
             "Politely decline and order another drink"
           ],
-          "requires_roll": null
+          "requires_roll": null,
+          "is_combat": false,
+          "is_game_over": false
         }
         """
         
@@ -245,7 +297,9 @@ class LLMClient: AIClientProtocol {
             "Attempt to reason with the ancient creature",
             "Signal Kael and coordinate a simultaneous strike"
           ],
-          "requires_roll": "charisma"
+          "requires_roll": "charisma",
+          "is_combat": true,
+          "is_game_over": false
         }
         """
         
@@ -263,7 +317,9 @@ class LLMClient: AIClientProtocol {
             "Attempt to decipher the ancient runes",
             "Follow the sound of water deeper into the chamber"
           ],
-          "requires_roll": "intelligence"
+          "requires_roll": "intelligence",
+          "is_combat": false,
+          "is_game_over": false
         }
         """
         
