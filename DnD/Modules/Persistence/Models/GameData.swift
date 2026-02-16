@@ -16,6 +16,15 @@ final class GameData {
     var unspentAbilityPoints: Int
     var inventory: [String]
     var creationDate: Date
+
+    @Relationship(deleteRule: .cascade)
+    var runState: RunStateData?
+
+    @Relationship(deleteRule: .cascade)
+    var combatState: CombatStateData?
+
+    @Relationship(deleteRule: .cascade)
+    var progressionState: ProgressionStateData?
     
     @Relationship(deleteRule: .cascade)
     var storyHistory: [StoryEntry] = []
