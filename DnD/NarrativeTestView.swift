@@ -3,13 +3,15 @@ import SwiftUI
 
 struct NarrativeTestView: View {
     let startMode: NarrativeStartMode
+    let playerOverride: Player?
     @StateObject private var viewModel: NarrativeTestViewModel
     @State private var showModelAlert = false
     @State private var hasTriggeredStart = false
 
-    init(startMode: NarrativeStartMode = .newGame) {
+    init(startMode: NarrativeStartMode = .newGame, playerOverride: Player? = nil) {
         self.startMode = startMode
-        _viewModel = StateObject(wrappedValue: NarrativeTestViewModel())
+        self.playerOverride = playerOverride
+        _viewModel = StateObject(wrappedValue: NarrativeTestViewModel(playerOverride: playerOverride))
     }
     
     var body: some View {
@@ -335,12 +337,13 @@ struct NarrativeTestView: View {
         private let dataService = DataService.shared
         private var currentGameData: GameData?
         
-        init() {
+        init(playerOverride: Player? = nil) {
             StartupDiagnostics.mark("NarrativeTestViewModel init")
-            let basePlayer = Player(
+            let basePlayer = playerOverride ?? Player(
                 name: "Aldric the Brave",
-                hp: 45,
-                maxHP: 45,
+                hp: Player.defaultMaxHP,
+                maxHP: Player.defaultMaxHP,
+                archetype: "Warden",
                 abilityScores: [
                     .strength: 14,
                     .dexterity: 11,
@@ -354,7 +357,7 @@ struct NarrativeTestView: View {
             )
             self.defaultPlayer = basePlayer
             
-            if let latestGame = dataService.fetchLatestGame() {
+            if playerOverride == nil, let latestGame = dataService.fetchLatestGame() {
                 self.currentGameData = latestGame
                 self.player = dataService.player(from: latestGame)
             } else {

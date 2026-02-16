@@ -175,6 +175,7 @@ class DataService {
             name: gameData.playerName,
             hp: gameData.hp,
             maxHP: gameData.maxHP,
+            archetype: gameData.archetype ?? Player.defaultArchetype,
             abilityScores: [
                 .strength: gameData.strength,
                 .dexterity: gameData.dexterity,

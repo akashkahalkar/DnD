@@ -16,18 +16,23 @@ enum Ability: String, CaseIterable, Codable, Hashable {
     }
 }
 
-struct Player: Codable {
+struct Player: Codable, Hashable {
     var name: String
     var hp: Int
     var maxHP: Int
+    var archetype: String
     var abilityScores: [Ability: Int]
     var unspentAbilityPoints: Int
     var inventory: [String] = []
+
+    static let defaultMaxHP = 45
+    static let defaultArchetype = "Wanderer"
     
     init(
         name: String,
         hp: Int,
         maxHP: Int,
+        archetype: String = Player.defaultArchetype,
         abilityScores: [Ability: Int] = Ability.defaultScores,
         unspentAbilityPoints: Int = Ability.defaultUnspentPoints,
         inventory: [String] = []
@@ -35,6 +40,7 @@ struct Player: Codable {
         self.name = name
         self.hp = hp
         self.maxHP = maxHP
+        self.archetype = archetype
         self.abilityScores = abilityScores
         self.unspentAbilityPoints = unspentAbilityPoints
         self.inventory = inventory

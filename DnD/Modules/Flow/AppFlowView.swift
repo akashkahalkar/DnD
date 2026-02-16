@@ -2,6 +2,7 @@ import SwiftUI
 
 enum AppRoute: Hashable {
     case home
+    case characterCreation
     case continueRun
     case narrative(startMode: NarrativeStartMode)
     case settings
@@ -15,11 +16,12 @@ enum NarrativeStartMode: String, Hashable {
 
 struct AppFlowView: View {
     @State private var path: [AppRoute] = []
+    @State private var pendingNewPlayer: Player?
 
     var body: some View {
         NavigationStack(path: $path) {
             HomeView(
-                onStartNew: { path.append(.narrative(startMode: .newGame)) },
+                onStartNew: { path.append(.characterCreation) },
                 onContinue: { path.append(.continueRun) },
                 onSettings: { path.append(.settings) },
                 onAbout: { path.append(.about) }
@@ -28,18 +30,26 @@ struct AppFlowView: View {
                 switch route {
                 case .home:
                     HomeView(
-                        onStartNew: { path.append(.narrative(startMode: .newGame)) },
+                        onStartNew: { path.append(.characterCreation) },
                         onContinue: { path.append(.continueRun) },
                         onSettings: { path.append(.settings) },
                         onAbout: { path.append(.about) }
                     )
+                case .characterCreation:
+                    CharacterCreationView(
+                        onComplete: { newPlayer in
+                            pendingNewPlayer = newPlayer
+                            path.append(.narrative(startMode: .newGame))
+                        },
+                        onCancel: { path.removeLast() }
+                    )
                 case .continueRun:
                     ContinueView(
                         onContinue: { path.append(.narrative(startMode: .continueRun)) },
-                        onStartFresh: { path.append(.narrative(startMode: .newGame)) }
+                        onStartFresh: { path.append(.characterCreation) }
                     )
                 case .narrative(let startMode):
-                    NarrativeTestView(startMode: startMode)
+                    NarrativeTestView(startMode: startMode, playerOverride: pendingNewPlayer)
                         .navigationBarTitleDisplayMode(.inline)
                 case .settings:
                     PlaceholderScreen(

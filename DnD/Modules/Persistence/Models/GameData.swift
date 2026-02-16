@@ -7,6 +7,7 @@ final class GameData {
     var playerName: String
     var hp: Int
     var maxHP: Int
+    var archetype: String?
     var strength: Int
     var dexterity: Int
     var constitution: Int
@@ -34,6 +35,7 @@ final class GameData {
         self.playerName = player.name
         self.hp = player.hp
         self.maxHP = player.maxHP
+        self.archetype = player.archetype
         self.strength = player.abilityScore(for: .strength)
         self.dexterity = player.abilityScore(for: .dexterity)
         self.constitution = player.abilityScore(for: .constitution)
@@ -49,6 +51,7 @@ final class GameData {
         playerName = player.name
         hp = player.hp
         maxHP = player.maxHP
+        archetype = player.archetype
         strength = player.abilityScore(for: .strength)
         dexterity = player.abilityScore(for: .dexterity)
         constitution = player.abilityScore(for: .constitution)
