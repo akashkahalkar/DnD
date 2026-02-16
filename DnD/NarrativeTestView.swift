@@ -69,6 +69,16 @@ struct NarrativeTestView: View {
                         if viewModel.state == .sceneDisplay {
                             SceneDisplayView(story: story, viewModel: viewModel)
                         }
+                        else if viewModel.state == .combat {
+                            BattleScreen()
+                                .frame(height: 520)
+                                .padding(.horizontal, 16)
+                            
+                            FantasyPrimaryButton(title: "RESOLVE BATTLE") {
+                                viewModel.resolveCombatAndContinue()
+                            }
+                            .padding(.horizontal, 16)
+                        }
                         else if case .resolving(let roll, let dc, let hpChange, let outcome) = viewModel.state {
                             ResolutionView(roll: roll, dc: dc, hpChange: hpChange, outcome: outcome) {
                                 viewModel.continueToNextScene()
@@ -111,6 +121,31 @@ struct NarrativeTestView: View {
                         .padding(.horizontal, 16)
                     }
                     
+                    // Game Over State
+                    if case .gameOver(let message) = viewModel.state {
+                        FantasyPanel {
+                            VStack(spacing: 12) {
+                                Image(systemName: "xmark.octagon.fill")
+                                    .font(.system(size: 32))
+                                    .foregroundColor(.accentDanger)
+                                
+                                Text("GAME OVER")
+                                    .font(.fantasyTitle)
+                                    .foregroundColor(.accentDanger)
+                                
+                                Text(message)
+                                    .font(.fantasyBody)
+                                    .foregroundColor(.textPrimary)
+                                    .multilineTextAlignment(.center)
+                                
+                                FantasyPrimaryButton(title: "START NEW RUN") {
+                                    viewModel.startNewGame()
+                                }
+                            }
+                        }
+                        .padding(.horizontal, 16)
+                    }
+                    
                     // Start/Restart Button
                     if viewModel.currentStory == nil && viewModel.state != .loading {
                         FantasyPrimaryButton(title: "START ADVENTURE") {
@@ -121,7 +156,7 @@ struct NarrativeTestView: View {
                     
                     // History Count
                     if viewModel.storyHistory.count > 0 {
-                        Text("Story Turns: \(viewModel.storyHistory.count)")
+                        Text("Turn \(viewModel.storyHistory.count) of 8")
                             .font(.fantasyCaption)
                             .foregroundColor(.textMuted)
                     }
@@ -248,14 +283,18 @@ struct NarrativeTestView: View {
         enum NarrativeState: Equatable {
             case sceneDisplay
             case resolving(roll: DiceResult, dc: Int, hpChange: Int, outcome: Bool)
+            case combat
+            case gameOver(String)
             case loading
             case error(String)
             
             static func == (lhs: NarrativeState, rhs: NarrativeState) -> Bool {
                 switch (lhs, rhs) {
-                case (.sceneDisplay, .sceneDisplay), (.loading, .loading):
+                case (.sceneDisplay, .sceneDisplay), (.loading, .loading), (.combat, .combat):
                     return true
                 case (.error(let a), .error(let b)):
+                    return a == b
+                case (.gameOver(let a), .gameOver(let b)):
                     return a == b
                 case (.resolving(let r1, let d1, let h1, let o1), .resolving(let r2, let d2, let h2, let o2)):
                     return r1.total == r2.total && d1 == d2 && h1 == h2 && o1 == o2
@@ -330,6 +369,9 @@ struct NarrativeTestView: View {
             StartupDiagnostics.mark("startNewGame requested")
             Task {
                 state = .loading
+                if player.hp <= 0 {
+                    player.hp = player.maxHP
+                }
                 
                 do {
                     let story = try await orchestrator.startNewGame(player: player, turnNumber: 1)
@@ -339,7 +381,7 @@ struct NarrativeTestView: View {
                     if let gameData = currentGameData {
                         dataService.appendStory(to: gameData, scene: story.sceneDescription, choice: nil)
                     }
-                    state = .sceneDisplay
+                    updateStateForStory(story)
                     let elapsed = ProcessInfo.processInfo.systemUptime - requestStart
                     let formatted = String(format: "%.3f", elapsed)
                     StartupDiagnostics.mark("startNewGame completed in \(formatted)s")
@@ -396,7 +438,7 @@ struct NarrativeTestView: View {
                         storyHistory.append(story)
                         persistPlayerState()
                         persistStory(scene: story.sceneDescription, choice: choice)
-                        state = .sceneDisplay
+                        updateStateForStory(story)
                     }
                 } catch {
                     state = .error("Failed to process choice: \(error.localizedDescription)")
@@ -429,11 +471,51 @@ struct NarrativeTestView: View {
                     pendingResolution = nil
                     persistPlayerState()
                     persistStory(scene: story.sceneDescription, choice: resolution.choice)
-                    state = .sceneDisplay
+                    updateStateForStory(story)
                     
                 } catch {
                     state = .error("Failed to generate next scene: \(error.localizedDescription)")
                 }
+            }
+        }
+        
+        func resolveCombatAndContinue() {
+            Task {
+                let incomingDamage = Int.random(in: 2...8)
+                player.hp = max(0, player.hp - incomingDamage)
+                persistPlayerState()
+                
+                if player.hp <= 0 {
+                    state = .gameOver("You were defeated in battle. Your journey ends here.")
+                    return
+                }
+                
+                state = .loading
+                do {
+                    let nextTurnNumber = storyHistory.count + 1
+                    let story = try await orchestrator.processPlayerChoice(
+                        choice: "The battle concluded. The hero pushes forward.",
+                        player: player,
+                        turnNumber: nextTurnNumber
+                    )
+                    currentStory = story
+                    storyHistory.append(story)
+                    persistPlayerState()
+                    persistStory(scene: story.sceneDescription, choice: "Resolve battle")
+                    updateStateForStory(story)
+                } catch {
+                    state = .error("Failed to continue after combat: \(error.localizedDescription)")
+                }
+            }
+        }
+        
+        private func updateStateForStory(_ story: StoryResponse) {
+            if player.hp <= 0 || story.isGameOver == true {
+                state = .gameOver("The campaign has reached its end.")
+            } else if story.isCombat == true {
+                state = .combat
+            } else {
+                state = .sceneDisplay
             }
         }
         

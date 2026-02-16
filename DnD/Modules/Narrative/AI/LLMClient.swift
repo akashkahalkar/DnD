@@ -147,10 +147,12 @@ class LLMClient: AIClientProtocol {
     
     private func buildDungeonMasterInstructions() -> String {
         """
-        Expert DM for dark fantasy RPG. concise response.
+        Expert DM for dark-fantasy RPG. Session is exactly 8 turns.
         - Give 3 choices.
-        - requires_roll: nil by default. Use only for high stakes (1 in 4 scenes).
-        - is_combat: only for active battle.
+        - requires_roll: nil by default. Use only for high stakes.
+        - is_game_over: MUST be true at turn 8.
+        - Turn 7: FORCE a confrontation (is_combat=true). Use ambushes for cautious players.
+        - quest_outcome: Set 'success' or 'failure' at turn 8 based on story logic.
         - Tone: Atmospheric, tactical.
         """
     }

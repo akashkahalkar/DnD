@@ -11,39 +11,41 @@ class NarrativeOrchestrator {
     func startNewGame(player: Player, turnNumber: Int = 1) async throws -> StoryResponse {
         aiClient.resetSession()
         
-        let basePrompt = """
+        let prompt = """
         GAME_CONTEXT
-        - session_phase: opening_scene
+        - phase: mission_start
         \(buildPlayerContext(player: player))
-        - turn_number: \(turnNumber)
-        - target_session_length_turns: 10-15
-        - previous_scene: none
-        - previous_choice: none
+        - turn: \(turnNumber)/8
         
         TASK
-        - Start a new dark-fantasy adventure.
+        - Start a short dark-fantasy quest.
+        - Introduce a clear objective or threat.
+        - No combat yet.
         """
         
-        let response = try await aiClient.generateStory(prompt: basePrompt)
+        var response = try await aiClient.generateStory(prompt: prompt)
+        response.xpChange = calculateDeterministicXP(turn: turnNumber, outcome: response.questOutcome)
         self.currentStory = response
         return response
     }
     
     func processPlayerChoice(choice: String, player: Player, turnNumber: Int) async throws -> StoryResponse {
+        let phase = determinePhase(turn: turnNumber)
         let prompt = """
         GAME_CONTEXT
-        - session_phase: ongoing_scene
+        - phase: \(phase)
         \(buildPlayerContext(player: player))
-        - turn_number: \(turnNumber)
+        - turn: \(turnNumber)/8
         \(buildPreviousStoryContext())
-        - previous_choice: \(quoted(choice))
-        \(player.hp <= 0 ? "- hard_rule: player_hp_is_zero => is_game_over_must_be_true" : "")
+        - choice: \(quoted(choice))
         
         TASK
-        - Continue the story based on previous choice and current state.
+        - Continue the story.
+        \(phaseTaskInstructions(phase: phase))
         """
         
-        let response = try await aiClient.generateStory(prompt: prompt)
+        var response = try await aiClient.generateStory(prompt: prompt)
+        response.xpChange = calculateDeterministicXP(turn: turnNumber, outcome: response.questOutcome)
         self.currentStory = response
         return response
     }
@@ -68,31 +70,25 @@ class NarrativeOrchestrator {
         hpChange: Int,
         outcomeDescription: String
     ) async throws -> StoryResponse {
-        // Generate compact structured context based on known outcome.
+        let phase = determinePhase(turn: turnNumber)
         let rollOutcome = hpChange < 0 ? "damage_\(abs(hpChange))" : "no_damage"
         
         let prompt = """
         GAME_CONTEXT
-        - session_phase: post_roll_resolution
+        - phase: \(phase) (post_roll)
         \(buildPlayerContext(player: player))
-        - turn_number: \(turnNumber)
+        - turn: \(turnNumber)/8
         \(buildPreviousStoryContext())
-        - previous_choice: \(quoted(choice))
-        - resolved_roll:
-          - d20: \(rollResult.roll)
-          - modifier: \(rollResult.bonus)
-          - total: \(rollResult.total)
-          - dc: \(dc)
-          - outcome: \(quoted(outcomeDescription))
-          - consequence: \(rollOutcome)
-        \(player.hp <= 0 ? "- hard_rule: player_hp_is_zero => is_game_over_must_be_true" : "")
+        - choice: \(quoted(choice))
+        - roll: {d20: \(rollResult.roll), total: \(rollResult.total), dc: \(dc), outcome: \(quoted(outcomeDescription)), consequence: \(rollOutcome)}
         
         TASK
-        - Continue the story based on resolved roll outcome and updated state.
-        - Make roll consequences clear in scene description and choices.
+        - Continue story with roll results.
+        \(phaseTaskInstructions(phase: phase))
         """
         
-        let response = try await aiClient.generateStory(prompt: prompt)
+        var response = try await aiClient.generateStory(prompt: prompt)
+        response.xpChange = calculateDeterministicXP(turn: turnNumber, outcome: response.questOutcome)
         self.currentStory = response
         return response
     }
@@ -132,37 +128,55 @@ class NarrativeOrchestrator {
     
     private func buildPlayerContext(player: Player) -> String {
         """
-        - player:
-          - name: \(quoted(player.name))
-          - hp: \(player.hp)
-          - max_hp: \(player.maxHP)
-          - ability_scores:
-            - strength: \(player.abilityScore(for: .strength))
-            - dexterity: \(player.abilityScore(for: .dexterity))
-            - constitution: \(player.abilityScore(for: .constitution))
-            - intelligence: \(player.abilityScore(for: .intelligence))
-            - wisdom: \(player.abilityScore(for: .wisdom))
-            - charisma: \(player.abilityScore(for: .charisma))
-          - inventory: \(player.inventory.isEmpty ? "[]" : "[" + player.inventory.map { quoted($0) }.joined(separator: ", ") + "]")
+        - player: {hp: \(player.hp)/\(player.maxHP), stats: STR\(player.abilityScore(for: .strength)) DEX\(player.abilityScore(for: .dexterity)) CON\(player.abilityScore(for: .constitution)) INT\(player.abilityScore(for: .intelligence)) WIS\(player.abilityScore(for: .wisdom)) CHA\(player.abilityScore(for: .charisma)), items: \(player.inventory.isEmpty ? "[]" : "[" + player.inventory.joined(separator: ", ") + "]")}
         """
+    }
+    
+    private func determinePhase(turn: Int) -> String {
+        if turn <= 7 { return "exploration" }
+        if turn == 8 { return "final_encounter_buildup" }
+        return "resolution"
+    }
+    
+    private func phaseTaskInstructions(phase: String) -> String {
+        switch phase {
+        case "exploration":
+            return "- Focus on atmosphere and buildup. No combat."
+        case "final_encounter_buildup":
+            return "- FORCE A CONFRONTATION (is_combat=true). If player was cautious, it MUST be an AMBUSH or INESCAPABLE TRAP. If aggressive, it's a boss fight."
+        case "resolution":
+            return "- Final result. Set quest_outcome to 'success' or 'failure' based on story logic. End session with is_game_over=true."
+        default:
+            return ""
+        }
+    }
+    
+    private func calculateDeterministicXP(turn: Int, outcome: String?) -> Int {
+        // Base turn XP
+        var xp = 10
+        
+        // Bonus/Penalty at the end
+        if turn >= 8 {
+            if outcome == "success" {
+                xp += 100
+            } else if outcome == "failure" {
+                xp -= 50
+            }
+        }
+        
+        return xp
     }
     
     private func buildPreviousStoryContext() -> String {
         guard let story = currentStory else {
-            return "- previous_scene: none"
+            return "- prev_scene: none"
         }
         
-        let sceneExcerpt = compact(story.sceneDescription, maxCharacters: 220)
-        let priorChoices = story.choices.prefix(3).map { quoted($0) }.joined(separator: ", ")
-        let rollRequirement = story.requiresRoll ?? "none"
+        let sceneExcerpt = compact(story.sceneDescription, maxCharacters: 180)
+        let priorChoices = story.choices.prefix(2).joined(separator: ", ")
         
         return """
-        - previous_scene:
-          - scene_excerpt: \(quoted(sceneExcerpt))
-          - prior_choices: [\(priorChoices)]
-          - required_roll: \(quoted(rollRequirement))
-          - is_combat: \(story.isCombat ?? false)
-          - is_game_over: \(story.isGameOver ?? false)
+        - prev_scene: {text: \(quoted(sceneExcerpt)), choices: [\(priorChoices)], roll: \(story.requiresRoll ?? "none"), is_combat: \(story.isCombat ?? false)}
         """
     }
     

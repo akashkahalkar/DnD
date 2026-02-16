@@ -15,14 +15,17 @@ struct StoryResponse: Codable {
     let requiresRoll: String? // "stealth", "strength", etc.
     let isGameOver: Bool?
     let isCombat: Bool?
+    var xpChange: Int?
+    let questOutcome: String? // "success", "failure", "in_progress"
     
     enum CodingKeys: String, CodingKey {
         case sceneDescription = "scene_description"
         case npcDialogue = "npc_dialogue"
         case choices
+        case isGameOver
         case requiresRoll = "requires_roll"
-        case isGameOver = "is_game_over"
         case isCombat = "is_combat"
+        case questOutcome = "quest_outcome"
     }
 }
 
@@ -51,7 +54,7 @@ struct GuidedStoryResponse {
     @Guide(description: "A vivid dark-fantasy scene in 2-3 sentences")
     var sceneDescription: String
     
-    @Guide(description: "0 to 2 NPC dialogue lines", .maximumCount(2))
+    @Guide(description: "0 to 2 NPC dialogue lines")
     var npcDialogue: [GuidedNPCLine]
     
     @Guide(description: "Exactly 3 meaningful player choices", .count(3))
@@ -60,8 +63,11 @@ struct GuidedStoryResponse {
     @Guide(description: "Use nil by default; only set for uncertain and high-stakes outcomes")
     var requiresRoll: GuidedAbility?
     
-    var isGameOver: Bool?
     var isCombat: Bool?
+    var isGameOver: Bool?
+    
+    @Guide(description: "One of: success, failure, in_progress")
+    var questOutcome: String?
 }
 
 @available(iOS 26.0, *)
@@ -73,7 +79,9 @@ extension GuidedStoryResponse {
             choices: choices,
             requiresRoll: requiresRoll?.rawValue,
             isGameOver: isGameOver,
-            isCombat: isCombat
+            isCombat: isCombat,
+            xpChange: nil, // To be filled by orchestrator
+            questOutcome: questOutcome
         )
     }
 }
