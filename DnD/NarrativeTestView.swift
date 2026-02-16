@@ -79,14 +79,19 @@ struct NarrativeTestView: View {
                             SceneDisplayView(story: story, viewModel: viewModel)
                         }
                         else if viewModel.state == .combat {
-                            BattleScreen()
-                                .frame(height: 520)
+                            if let combatState = viewModel.combatState {
+                                BattleScreen(
+                                    player: $viewModel.player,
+                                    combatState: Binding(
+                                        get: { combatState },
+                                        set: { viewModel.combatState = $0 }
+                                    ),
+                                    onCombatEnd: viewModel.handleCombatEnd,
+                                    onCombatUpdate: viewModel.persistCombatState
+                                )
+                                .frame(height: 640)
                                 .padding(.horizontal, 16)
-                            
-                            FantasyPrimaryButton(title: "RESOLVE BATTLE") {
-                                viewModel.resolveCombatAndContinue()
                             }
-                            .padding(.horizontal, 16)
                         }
                         else if case .resolving(let roll, let dc, let hpChange, let outcome) = viewModel.state {
                             ResolutionView(roll: roll, dc: dc, hpChange: hpChange, outcome: outcome) {
@@ -288,7 +293,7 @@ struct NarrativeTestView: View {
     
     @MainActor
     class NarrativeTestViewModel: ObservableObject {
-        
+
         // MARK: - State Machine
         
         enum NarrativeState: Equatable {
@@ -320,6 +325,7 @@ struct NarrativeTestView: View {
         @Published var storyHistory: [StoryResponse] = []
         @Published var isFoundationModelAvailable = false
         @Published var player: Player
+        @Published var combatState: CombatState?
         private let defaultPlayer: Player
         
         // Context for next story generation during resolution phase
@@ -388,6 +394,7 @@ struct NarrativeTestView: View {
                     currentGameData = nil
                     currentStory = nil
                     storyHistory = []
+                    combatState = nil
                 }
                 if player.hp <= 0 {
                     player.hp = player.maxHP
@@ -499,43 +506,127 @@ struct NarrativeTestView: View {
             }
         }
         
-        func resolveCombatAndContinue() {
-            Task {
-                let incomingDamage = Int.random(in: 2...8)
-                player.hp = max(0, player.hp - incomingDamage)
-                persistPlayerState()
-                
-                if player.hp <= 0 {
-                    state = .gameOver("You were defeated in battle. Your journey ends here.")
-                    return
+        private func updateStateForStory(_ story: StoryResponse) {
+            if player.hp <= 0 || story.isGameOver == true {
+                combatState = nil
+                state = .gameOver("The campaign has reached its end.")
+                persistRunState(phase: .gameOver)
+            } else if story.isCombat == true {
+                if combatState == nil {
+                    combatState = buildCombatState(turnNumber: storyHistory.count)
                 }
-                
+                state = .combat
+                persistRunState(phase: .combat, activeEnemy: combatState?.enemy)
+            } else {
+                combatState = nil
+                state = .sceneDisplay
+                persistRunState(phase: .narrative, questOutcome: questOutcome(from: story.questOutcome))
+            }
+        }
+
+        func handleCombatEnd(_ outcome: CombatOutcome) {
+            combatState = nil
+
+            switch outcome {
+            case .defeat:
+                state = .gameOver("You were defeated in battle. Your journey ends here.")
+                persistRunState(phase: .gameOver)
+            case .victory, .fled:
+                let choice = outcome == .victory
+                ? "The hero prevails in combat and presses onward."
+                : "The hero flees the battle to fight another day."
                 state = .loading
-                do {
-                    let nextTurnNumber = storyHistory.count + 1
-                    let story = try await orchestrator.processPlayerChoice(
-                        choice: "The battle concluded. The hero pushes forward.",
-                        player: player,
-                        turnNumber: nextTurnNumber
-                    )
-                    currentStory = story
-                    storyHistory.append(story)
-                    persistPlayerState()
-                    persistStory(scene: story.sceneDescription, choice: "Resolve battle")
-                    updateStateForStory(story)
-                } catch {
-                    state = .error("Failed to continue after combat: \(error.localizedDescription)")
+                Task {
+                    do {
+                        let nextTurnNumber = storyHistory.count + 1
+                        let story = try await orchestrator.processPlayerChoice(
+                            choice: choice,
+                            player: player,
+                            turnNumber: nextTurnNumber
+                        )
+                        currentStory = story
+                        storyHistory.append(story)
+                        persistPlayerState()
+                        persistStory(scene: story.sceneDescription, choice: choice)
+                        updateStateForStory(story)
+                    } catch {
+                        state = .error("Failed to continue after combat: \(error.localizedDescription)")
+                    }
                 }
             }
         }
-        
-        private func updateStateForStory(_ story: StoryResponse) {
-            if player.hp <= 0 || story.isGameOver == true {
-                state = .gameOver("The campaign has reached its end.")
-            } else if story.isCombat == true {
-                state = .combat
+
+        func persistCombatState() {
+            guard let gameData = currentGameData, let combatState else { return }
+            let runState = RunState(
+                phase: .combat,
+                turnNumber: storyHistory.count,
+                questOutcome: questOutcome(from: currentStory?.questOutcome),
+                activeEnemy: combatState.enemy
+            )
+            dataService.saveRunState(runState, combatState: combatState, to: gameData)
+        }
+
+        private func buildCombatState(turnNumber: Int) -> CombatState {
+            let enemy = generateEnemy(turnNumber: max(1, turnNumber))
+            return CombatState(
+                enemy: enemy,
+                playerTurn: true,
+                lastActionResult: nil,
+                roundNumber: 1
+            )
+        }
+
+        private func generateEnemy(turnNumber: Int) -> Enemy {
+            if turnNumber >= 7 {
+                return Enemy(
+                    name: "Dread Revenant",
+                    hp: 42,
+                    maxHP: 42,
+                    attackPower: 10,
+                    type: "Revenant Knight"
+                )
+            } else if turnNumber >= 4 {
+                return Enemy(
+                    name: "Grim Marauder",
+                    hp: 30,
+                    maxHP: 30,
+                    attackPower: 7,
+                    type: "Cult Enforcer"
+                )
             } else {
-                state = .sceneDisplay
+                return Enemy(
+                    name: "Crypt Stalker",
+                    hp: 22,
+                    maxHP: 22,
+                    attackPower: 5,
+                    type: "Ghoul"
+                )
+            }
+        }
+
+        private func persistRunState(phase: RunPhase, activeEnemy: Enemy? = nil, questOutcome: QuestOutcome? = nil) {
+            guard let gameData = currentGameData else { return }
+            let runState = RunState(
+                phase: phase,
+                turnNumber: storyHistory.count,
+                questOutcome: questOutcome,
+                activeEnemy: activeEnemy
+            )
+            dataService.saveRunState(runState, combatState: combatState, to: gameData)
+        }
+
+        private func questOutcome(from rawValue: String?) -> QuestOutcome? {
+            guard let rawValue else { return nil }
+            switch rawValue {
+            case "success":
+                return .success
+            case "failure":
+                return .failure
+            case "in_progress":
+                return .inProgress
+            default:
+                return nil
             }
         }
         

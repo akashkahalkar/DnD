@@ -13,38 +13,7 @@ struct FantasyLayoutWrapper<Content: View>: View {
     var body: some View {
         ZStack {
             FantasyBackground() // Base background
-            
-            #if os(iOS)
-            if horizontalSizeClass == .regular {
-                // IPAD / DESKTOP LAYOUT (Sidebar)
-                HStack(spacing: 0) {
-                    //FantasySidebar(selectedTab: $selectedTab)
-                    
-                    ZStack {
-                        // Main Content Area
-                        content()
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                }
-            } else {
-                // IPHONE LAYOUT (Bottom Tab Bar)
-                ZStack {
-                    content()
-                        .padding(.bottom, 80) // Space for tab bar
-                    
-                    VStack {
-                        Spacer()
-                        //FantasyTabBar(selectedTab: $selectedTab)
-                    }
-                }
-            }
-            #else
-            // Fallback for other platforms (simplified)
-             HStack(spacing: 0) {
-                FantasySidebar(selectedTab: $selectedTab)
-                content()
-            }
-            #endif
+            content()
         }
     }
 }
