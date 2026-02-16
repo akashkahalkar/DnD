@@ -10,8 +10,7 @@ import SwiftUI
 struct ContentView: View {
     var body: some View {
         FantasyLayoutWrapper {
-            // Switch to NarrativeTestView for testing story generation
-            NarrativeTestView()
+            AppFlowView()
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
     }

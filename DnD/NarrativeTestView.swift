@@ -2,8 +2,15 @@ import Combine
 import SwiftUI
 
 struct NarrativeTestView: View {
-    @StateObject private var viewModel = NarrativeTestViewModel()
+    let startMode: NarrativeStartMode
+    @StateObject private var viewModel: NarrativeTestViewModel
     @State private var showModelAlert = false
+    @State private var hasTriggeredStart = false
+
+    init(startMode: NarrativeStartMode = .newGame) {
+        self.startMode = startMode
+        _viewModel = StateObject(wrappedValue: NarrativeTestViewModel())
+    }
     
     var body: some View {
         ZStack {
@@ -139,7 +146,7 @@ struct NarrativeTestView: View {
                                     .multilineTextAlignment(.center)
                                 
                                 FantasyPrimaryButton(title: "START NEW RUN") {
-                                    viewModel.startNewGame()
+                                    viewModel.startNewGame(resetPlayer: true)
                                 }
                             }
                         }
@@ -148,8 +155,8 @@ struct NarrativeTestView: View {
                     
                     // Start/Restart Button
                     if viewModel.currentStory == nil && viewModel.state != .loading {
-                        FantasyPrimaryButton(title: "START ADVENTURE") {
-                            viewModel.startNewGame()
+                        FantasyPrimaryButton(title: startMode == .newGame ? "START ADVENTURE" : "RESUME ADVENTURE") {
+                            viewModel.startNewGame(resetPlayer: startMode == .newGame)
                         }
                         .padding(.horizontal, 16)
                     }
@@ -167,9 +174,11 @@ struct NarrativeTestView: View {
         .onAppear {
             StartupDiagnostics.mark("NarrativeTestView onAppear")
             viewModel.checkFoundationModelAvailability()
-            if viewModel.currentStory == nil {
+            guard !hasTriggeredStart else { return }
+            hasTriggeredStart = true
+            if startMode == .newGame {
                 StartupDiagnostics.mark("NarrativeTestView triggering initial startNewGame")
-                viewModel.startNewGame()
+                viewModel.startNewGame(resetPlayer: true)
             }
         }
         .alert("Foundation Models Not Available", isPresented: $showModelAlert) {
@@ -304,11 +313,12 @@ struct NarrativeTestView: View {
             }
         }
         
-        @Published var state: NarrativeState = .loading // Start with loading initial scene
+        @Published var state: NarrativeState = .sceneDisplay
         @Published var currentStory: StoryResponse? = nil
         @Published var storyHistory: [StoryResponse] = []
         @Published var isFoundationModelAvailable = false
         @Published var player: Player
+        private let defaultPlayer: Player
         
         // Context for next story generation during resolution phase
         private struct PendingResolution {
@@ -327,7 +337,7 @@ struct NarrativeTestView: View {
         
         init() {
             StartupDiagnostics.mark("NarrativeTestViewModel init")
-            let defaultPlayer = Player(
+            let basePlayer = Player(
                 name: "Aldric the Brave",
                 hp: 45,
                 maxHP: 45,
@@ -342,12 +352,13 @@ struct NarrativeTestView: View {
                 unspentAbilityPoints: 5,
                 inventory: ["Longsword", "Health Potion", "Torch"]
             )
+            self.defaultPlayer = basePlayer
             
             if let latestGame = dataService.fetchLatestGame() {
                 self.currentGameData = latestGame
                 self.player = dataService.player(from: latestGame)
             } else {
-                self.player = defaultPlayer
+                self.player = basePlayer
             }
         }
         
@@ -364,11 +375,17 @@ struct NarrativeTestView: View {
             }
         }
         
-        func startNewGame() {
+        func startNewGame(resetPlayer: Bool = false) {
             let requestStart = ProcessInfo.processInfo.systemUptime
             StartupDiagnostics.mark("startNewGame requested")
             Task {
                 state = .loading
+                if resetPlayer {
+                    player = defaultPlayer
+                    currentGameData = nil
+                    currentStory = nil
+                    storyHistory = []
+                }
                 if player.hp <= 0 {
                     player.hp = player.maxHP
                 }
