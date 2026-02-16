@@ -143,9 +143,15 @@ class NarrativeOrchestrator {
         case "exploration":
             return "- Focus on atmosphere and buildup. No combat."
         case "final_encounter_buildup":
-            return "- FORCE A CONFRONTATION (is_combat=true). If player was cautious, it MUST be an AMBUSH or INESCAPABLE TRAP. If aggressive, it's a boss fight."
+            return """
+            - FORCE A CONFRONTATION (is_combat=true).
+            - If player was cautious, it MUST be an AMBUSH or INESCAPABLE TRAP. If aggressive, it's a boss fight.
+            - quest_outcome should remain in_progress.
+            """
         case "resolution":
-            return "- Final result. Set quest_outcome to 'success' or 'failure' based on story logic. End session with is_game_over=true."
+            return """
+            - Final result. Set quest_outcome to 'success' or 'failure' based on story logic.
+            """
         default:
             return ""
         }

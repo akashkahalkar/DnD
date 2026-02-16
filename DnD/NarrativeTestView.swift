@@ -99,6 +99,23 @@ struct NarrativeTestView: View {
                             }
                         }
                     }
+
+                    if case .combatRewards(let xp, let rewards) = viewModel.state {
+                        CombatRewardsView(xpGained: xp, rewards: rewards) {
+                            viewModel.handleRewardsContinue()
+                        }
+                        .padding(.horizontal, 16)
+                    }
+
+                    if viewModel.state == .levelUp {
+                        LevelUpView(
+                            player: $viewModel.player,
+                            progression: $viewModel.progression
+                        ) {
+                            viewModel.handleLevelUpConfirm()
+                        }
+                        .padding(.horizontal, 16)
+                    }
                     
                     // Loading State
                     if viewModel.state == .loading {
@@ -300,6 +317,8 @@ struct NarrativeTestView: View {
             case sceneDisplay
             case resolving(roll: DiceResult, dc: Int, hpChange: Int, outcome: Bool)
             case combat
+            case combatRewards(xp: Int, rewards: [String])
+            case levelUp
             case gameOver(String)
             case loading
             case error(String)
@@ -308,6 +327,10 @@ struct NarrativeTestView: View {
                 switch (lhs, rhs) {
                 case (.sceneDisplay, .sceneDisplay), (.loading, .loading), (.combat, .combat):
                     return true
+                case (.levelUp, .levelUp):
+                    return true
+                case (.combatRewards(let x1, let r1), .combatRewards(let x2, let r2)):
+                    return x1 == x2 && r1 == r2
                 case (.error(let a), .error(let b)):
                     return a == b
                 case (.gameOver(let a), .gameOver(let b)):
@@ -325,6 +348,7 @@ struct NarrativeTestView: View {
         @Published var storyHistory: [StoryResponse] = []
         @Published var isFoundationModelAvailable = false
         @Published var player: Player
+        @Published var progression: ProgressionState
         @Published var combatState: CombatState?
         private let defaultPlayer: Player
         
@@ -366,8 +390,14 @@ struct NarrativeTestView: View {
             if playerOverride == nil, let latestGame = dataService.fetchLatestGame() {
                 self.currentGameData = latestGame
                 self.player = dataService.player(from: latestGame)
+                if let savedProgression = dataService.loadProgressionState(from: latestGame) {
+                    self.progression = savedProgression
+                } else {
+                    self.progression = ProgressionState(xp: 0, level: 1, unspentPoints: 0, recentRewards: [])
+                }
             } else {
                 self.player = basePlayer
+                self.progression = ProgressionState(xp: 0, level: 1, unspentPoints: 0, recentRewards: [])
             }
         }
         
@@ -395,6 +425,7 @@ struct NarrativeTestView: View {
                     currentStory = nil
                     storyHistory = []
                     combatState = nil
+                    progression = ProgressionState(xp: 0, level: 1, unspentPoints: 0, recentRewards: [])
                 }
                 if player.hp <= 0 {
                     player.hp = player.maxHP
@@ -407,6 +438,7 @@ struct NarrativeTestView: View {
                     currentGameData = dataService.saveGame(player: player)
                     if let gameData = currentGameData {
                         dataService.appendStory(to: gameData, scene: story.sceneDescription, choice: nil)
+                        dataService.saveProgressionState(progression, to: gameData)
                     }
                     updateStateForStory(story)
                     let elapsed = ProcessInfo.processInfo.systemUptime - requestStart
@@ -507,21 +539,25 @@ struct NarrativeTestView: View {
         }
         
         private func updateStateForStory(_ story: StoryResponse) {
-            if player.hp <= 0 || story.isGameOver == true {
+            if player.hp <= 0 {
                 combatState = nil
                 state = .gameOver("The campaign has reached its end.")
                 persistRunState(phase: .gameOver)
-            } else if story.isCombat == true {
+                return
+            }
+
+            if story.isCombat == true {
                 if combatState == nil {
                     combatState = buildCombatState(turnNumber: storyHistory.count)
                 }
                 state = .combat
                 persistRunState(phase: .combat, activeEnemy: combatState?.enemy)
-            } else {
-                combatState = nil
-                state = .sceneDisplay
-                persistRunState(phase: .narrative, questOutcome: questOutcome(from: story.questOutcome))
+                return
             }
+
+            combatState = nil
+            state = .sceneDisplay
+            persistRunState(phase: .narrative, questOutcome: questOutcome(from: story.questOutcome))
         }
 
         func handleCombatEnd(_ outcome: CombatOutcome) {
@@ -532,26 +568,13 @@ struct NarrativeTestView: View {
                 state = .gameOver("You were defeated in battle. Your journey ends here.")
                 persistRunState(phase: .gameOver)
             case .victory, .fled:
-                let choice = outcome == .victory
-                ? "The hero prevails in combat and presses onward."
-                : "The hero flees the battle to fight another day."
-                state = .loading
-                Task {
-                    do {
-                        let nextTurnNumber = storyHistory.count + 1
-                        let story = try await orchestrator.processPlayerChoice(
-                            choice: choice,
-                            player: player,
-                            turnNumber: nextTurnNumber
-                        )
-                        currentStory = story
-                        storyHistory.append(story)
-                        persistPlayerState()
-                        persistStory(scene: story.sceneDescription, choice: choice)
-                        updateStateForStory(story)
-                    } catch {
-                        state = .error("Failed to continue after combat: \(error.localizedDescription)")
-                    }
+                if outcome == .victory {
+                    let rewards = grantCombatRewards(turnNumber: storyHistory.count)
+                    state = .combatRewards(xp: rewards.xpGained, rewards: rewards.items)
+                } else {
+                    continueAfterCombat(
+                        choice: "The hero flees the battle to fight another day."
+                    )
                 }
             }
         }
@@ -565,6 +588,42 @@ struct NarrativeTestView: View {
                 activeEnemy: combatState.enemy
             )
             dataService.saveRunState(runState, combatState: combatState, to: gameData)
+        }
+
+        func handleRewardsContinue() {
+            if progression.unspentPoints > 0 {
+                state = .levelUp
+                persistRunState(phase: .levelUp)
+                return
+            }
+            continueAfterCombat(choice: "The hero prevails in combat and presses onward.")
+        }
+
+        func handleLevelUpConfirm() {
+            persistPlayerState()
+            persistProgressionState()
+            continueAfterCombat(choice: "Empowered by growth, the hero presses onward.")
+        }
+
+        private func continueAfterCombat(choice: String) {
+            state = .loading
+            Task {
+                do {
+                    let nextTurnNumber = storyHistory.count + 1
+                    let story = try await orchestrator.processPlayerChoice(
+                        choice: choice,
+                        player: player,
+                        turnNumber: nextTurnNumber
+                    )
+                    currentStory = story
+                    storyHistory.append(story)
+                    persistPlayerState()
+                    persistStory(scene: story.sceneDescription, choice: choice)
+                    updateStateForStory(story)
+                } catch {
+                    state = .error("Failed to continue after combat: \(error.localizedDescription)")
+                }
+            }
         }
 
         private func buildCombatState(turnNumber: Int) -> CombatState {
@@ -613,7 +672,12 @@ struct NarrativeTestView: View {
                 questOutcome: questOutcome,
                 activeEnemy: activeEnemy
             )
-            dataService.saveRunState(runState, combatState: combatState, to: gameData)
+            dataService.saveRunState(runState, combatState: combatState, progressionState: progression, to: gameData)
+        }
+
+        private func persistProgressionState() {
+            guard let gameData = currentGameData else { return }
+            dataService.saveProgressionState(progression, to: gameData)
         }
 
         private func questOutcome(from rawValue: String?) -> QuestOutcome? {
@@ -627,6 +691,58 @@ struct NarrativeTestView: View {
                 return .inProgress
             default:
                 return nil
+            }
+        }
+
+        private func grantCombatRewards(turnNumber: Int) -> (xpGained: Int, items: [String]) {
+            let baseXP = turnNumber >= 7 ? 50 : 25
+            let xpGained = baseXP + Int.random(in: 5...15)
+            progression.xp += xpGained
+
+            let newLevel = levelForXP(progression.xp)
+            if newLevel > progression.level {
+                let gainedLevels = newLevel - progression.level
+                progression.level = newLevel
+                progression.unspentPoints += gainedLevels * 2
+            }
+
+            let rewards = rollLoot(turnNumber: turnNumber)
+            if !rewards.isEmpty {
+                player.inventory.append(contentsOf: rewards)
+            }
+            progression.recentRewards = rewards
+            persistPlayerState()
+            persistProgressionState()
+            return (xpGained, rewards)
+        }
+
+        private func levelForXP(_ xp: Int) -> Int {
+            switch xp {
+            case 0..<50:
+                return 1
+            case 50..<120:
+                return 2
+            case 120..<200:
+                return 3
+            case 200..<300:
+                return 4
+            default:
+                return 5
+            }
+        }
+
+        private func rollLoot(turnNumber: Int) -> [String] {
+            let roll = Int.random(in: 1...100)
+            if roll < 40 {
+                return []
+            } else if roll < 75 {
+                return ["Health Potion"]
+            } else if roll < 90 {
+                return ["Mana Tonic"]
+            } else if turnNumber >= 7 {
+                return ["Relic Shard"]
+            } else {
+                return ["Silver Charm"]
             }
         }
         

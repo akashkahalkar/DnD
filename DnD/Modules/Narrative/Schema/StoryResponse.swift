@@ -13,7 +13,6 @@ struct StoryResponse: Codable {
     let npcDialogue: [NPCLine]
     let choices: [String]
     let requiresRoll: String? // "stealth", "strength", etc.
-    let isGameOver: Bool?
     let isCombat: Bool?
     var xpChange: Int?
     let questOutcome: String? // "success", "failure", "in_progress"
@@ -22,7 +21,6 @@ struct StoryResponse: Codable {
         case sceneDescription = "scene_description"
         case npcDialogue = "npc_dialogue"
         case choices
-        case isGameOver
         case requiresRoll = "requires_roll"
         case isCombat = "is_combat"
         case questOutcome = "quest_outcome"
@@ -64,7 +62,6 @@ struct GuidedStoryResponse {
     var requiresRoll: GuidedAbility?
     
     var isCombat: Bool?
-    var isGameOver: Bool?
     
     @Guide(description: "One of: success, failure, in_progress")
     var questOutcome: String?
@@ -78,7 +75,6 @@ extension GuidedStoryResponse {
             npcDialogue: npcDialogue.map { NPCLine(speaker: $0.speaker, line: $0.line) },
             choices: choices,
             requiresRoll: requiresRoll?.rawValue,
-            isGameOver: isGameOver,
             isCombat: isCombat,
             xpChange: nil, // To be filled by orchestrator
             questOutcome: questOutcome

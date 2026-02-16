@@ -150,7 +150,6 @@ class LLMClient: AIClientProtocol {
         Expert DM for dark-fantasy RPG. Session is exactly 8 turns.
         - Give 3 choices.
         - requires_roll: nil by default. Use only for high stakes.
-        - is_game_over: MUST be true at turn 8.
         - Turn 7: FORCE a confrontation (is_combat=true). Use ambushes for cautious players.
         - quest_outcome: Set 'success' or 'failure' at turn 8 based on story logic.
         - Tone: Atmospheric, tactical.
@@ -275,8 +274,7 @@ class LLMClient: AIClientProtocol {
             "Politely decline and order another drink"
           ],
           "requires_roll": null,
-          "is_combat": false,
-          "is_game_over": false
+          "is_combat": false
         }
         """
         
@@ -300,8 +298,7 @@ class LLMClient: AIClientProtocol {
             "Signal Kael and coordinate a simultaneous strike"
           ],
           "requires_roll": "charisma",
-          "is_combat": true,
-          "is_game_over": false
+          "is_combat": true
         }
         """
         
@@ -320,8 +317,7 @@ class LLMClient: AIClientProtocol {
             "Follow the sound of water deeper into the chamber"
           ],
           "requires_roll": "intelligence",
-          "is_combat": false,
-          "is_game_over": false
+          "is_combat": false
         }
         """
         
