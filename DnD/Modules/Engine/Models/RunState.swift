@@ -6,6 +6,7 @@ enum RunPhase: String, Codable {
     case levelUp
     case gameOver
     case victory
+    case questFailed
 }
 
 enum QuestOutcome: String, Codable {
