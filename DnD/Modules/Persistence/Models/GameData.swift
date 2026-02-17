@@ -26,6 +26,12 @@ final class GameData {
 
     @Relationship(deleteRule: .cascade)
     var progressionState: ProgressionStateData?
+
+    @Relationship(deleteRule: .cascade)
+    var campaignProgress: [CampaignProgressData] = []
+
+    @Relationship(deleteRule: .cascade)
+    var campaignRuntimeState: CampaignRuntimeStateData?
     
     @Relationship(deleteRule: .cascade)
     var storyHistory: [StoryEntry] = []
