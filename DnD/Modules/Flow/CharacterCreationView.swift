@@ -54,24 +54,17 @@ struct CharacterCreationView: View {
                                     .cornerRadius(12)
                             }
 
-                            VStack(alignment: .leading, spacing: 8) {
+                            HStack {
                                 Text("ARCHETYPE")
                                     .font(.fantasyCaption)
                                     .foregroundColor(.textSecondary)
-
-                                HStack(spacing: 12) {
-                                    ForEach(archetypes, id: \.self) { archetype in
-                                        Button(action: { selectedArchetype = archetype }) {
-                                            Text(archetype.uppercased())
-                                                .font(.fantasyCaption)
-                                                .foregroundColor(selectedArchetype == archetype ? .black : .textPrimary)
-                                                .padding(.vertical, 8)
-                                                .padding(.horizontal, 12)
-                                                .background(
-                                                    RoundedRectangle(cornerRadius: 12)
-                                                        .fill(selectedArchetype == archetype ? Color.accentGold : Color.white.opacity(0.08))
-                                                )
-                                        }
+                                Spacer()
+                                Picker("ARCHETYPE", selection: $selectedArchetype) {
+                                    ForEach(archetypes, id: \.self) { archtype in
+                                        Text(archtype).tag(archtype)
+                                            .background(                                                   RoundedRectangle(cornerRadius: 12)
+                                                .fill(selectedArchetype == archtype ? Color.accentGold : Color.white.opacity(0.08))
+                                            )
                                     }
                                 }
                             }
@@ -81,14 +74,16 @@ struct CharacterCreationView: View {
 
                     FantasyPanel {
                         VStack(alignment: .leading, spacing: 12) {
-                            Text("ABILITY POINTS")
-                                .font(.fantasyCaption)
-                                .foregroundColor(.accentGold)
-                                .tracking(2)
-
-                            Text("Remaining: \(remainingPoints)")
-                                .font(.fantasyBodyBold)
-                                .foregroundColor(remainingPoints > 0 ? .accentNeon : .textSecondary)
+                            HStack {
+                                Text("ABILITY POINTS")
+                                    .font(.fantasyCaption)
+                                    .foregroundColor(.accentGold)
+                                    .tracking(2)
+                                Spacer()
+                                Text("Remaining: \(remainingPoints)")
+                                    .font(.fantasyBodyBold)
+                                    .foregroundColor(remainingPoints > 0 ? .accentNeon : .textSecondary)
+                            }
 
                             VStack(spacing: 12) {
                                 ForEach(Ability.allCases, id: \.self) { ability in
@@ -157,14 +152,12 @@ private struct AbilityRow: View {
     let onIncrease: () -> Void
 
     var body: some View {
-        HStack(spacing: 12) {
+        HStack(spacing: 8) {
             Text(ability.rawValue.uppercased())
                 .font(.fantasyBodyBold)
                 .foregroundColor(.textPrimary)
-                .frame(width: 100, alignment: .leading)
-
+                .frame(alignment: .leading)
             Spacer()
-
             Button(action: onDecrease) {
                 Image(systemName: "minus.circle.fill")
                     .font(.system(size: 22))
