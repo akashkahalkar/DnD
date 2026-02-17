@@ -1,11 +1,9 @@
 import SwiftUI
 
 enum AppRoute: Hashable {
-    case home
     case characterCreation
     case continueRun
     case narrative(startMode: NarrativeStartMode)
-    case settings
     case about
 }
 
@@ -17,24 +15,48 @@ enum NarrativeStartMode: String, Hashable {
 struct AppFlowView: View {
     @State private var path: [AppRoute] = []
     @State private var pendingNewPlayer: Player?
+    @State private var selectedTab: RootTab = .home
 
     var body: some View {
         NavigationStack(path: $path) {
-            HomeView(
-                onStartNew: { path.append(.characterCreation) },
-                onContinue: { path.append(.continueRun) },
-                onSettings: { path.append(.settings) },
-                onAbout: { path.append(.about) }
-            )
+            TabView(selection: $selectedTab) {
+                HomeView(
+                    onStartNew: { path.append(.characterCreation) },
+                    onContinue: { path.append(.continueRun) },
+                    onSettings: { selectedTab = .settings },
+                    onAbout: { path.append(.about) }
+                )
+                .tabItem {
+                    Label("Home", systemImage: "house.fill")
+                }
+                .tag(RootTab.home)
+
+                CampaignsView()
+                    .tabItem {
+                        Label("Campaigns", systemImage: "square.grid.3x3.fill")
+                    }
+                    .tag(RootTab.campaigns)
+
+                if #available(iOS 26.0, *) {
+                    PlayerProgressView()
+                        .tabItem {
+                            Label("Player", systemImage: "person.fill")
+                        }
+                        .tag(RootTab.player)
+                } else {
+                        // Fallback on earlier versions
+                }
+
+                SettingsView(onResetRun: {
+                    DataService.shared.clearAllSaves()
+                })
+                .tabItem {
+                    Label("Settings", systemImage: "gearshape.fill")
+                }
+                .tag(RootTab.settings)
+            }
             .navigationDestination(for: AppRoute.self) { route in
                 switch route {
-                case .home:
-                    HomeView(
-                        onStartNew: { path.append(.characterCreation) },
-                        onContinue: { path.append(.continueRun) },
-                        onSettings: { path.append(.settings) },
-                        onAbout: { path.append(.about) }
-                    )
                 case .characterCreation:
                     CharacterCreationView(
                         onComplete: { newPlayer in
@@ -51,11 +73,6 @@ struct AppFlowView: View {
                 case .narrative(let startMode):
                     NarrativeTestView(startMode: startMode, playerOverride: pendingNewPlayer)
                         .navigationBarTitleDisplayMode(.inline)
-                case .settings:
-                    PlaceholderScreen(
-                        title: "Settings",
-                        message: "Settings controls will appear here in the next module."
-                    )
                 case .about:
                     PlaceholderScreen(
                         title: "About",
@@ -65,6 +82,13 @@ struct AppFlowView: View {
             }
         }
     }
+}
+
+private enum RootTab: Hashable {
+    case home
+    case campaigns
+    case player
+    case settings
 }
 
 private struct PlaceholderScreen: View {
