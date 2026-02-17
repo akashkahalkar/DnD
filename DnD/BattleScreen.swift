@@ -212,10 +212,12 @@ struct BattleScreen: View {
 
     private func enemyTurn(multiplier: Double) {
         var mutablePlayer = player
+        let dexReduction = max(0, player.abilityModifier(for: .dexterity))
         let (message, _) = CombatEngine.calculateEnemyAttack(
             enemy: combatState.enemy,
             player: &mutablePlayer,
-            damageMultiplier: multiplier
+            damageMultiplier: multiplier,
+            flatReduction: dexReduction
         )
         player = mutablePlayer
         appendLog(message)

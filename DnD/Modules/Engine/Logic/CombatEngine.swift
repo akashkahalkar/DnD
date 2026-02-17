@@ -14,9 +14,15 @@ class CombatEngine {
         return "You use \(action.name) and deal \(roll.total) damage to \(enemy.name)!"
     }
     
-    static func calculateEnemyAttack(enemy: Enemy, player: inout Player, damageMultiplier: Double = 1.0) -> (message: String, damage: Int) {
+    static func calculateEnemyAttack(
+        enemy: Enemy,
+        player: inout Player,
+        damageMultiplier: Double = 1.0,
+        flatReduction: Int = 0
+    ) -> (message: String, damage: Int) {
         let roll = DiceRoller.roll(.d6, bonus: enemy.attackPower / 2) // Simple enemy attack logic
-        let adjusted = max(1, Int(Double(roll.total) * damageMultiplier))
+        let scaled = max(1, Int(Double(roll.total) * damageMultiplier))
+        let adjusted = max(1, scaled - max(0, flatReduction))
         player.hp = max(0, player.hp - adjusted)
         
         return ("\(enemy.name) attacks and deals \(adjusted) damage to you!", adjusted)

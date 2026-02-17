@@ -6,6 +6,7 @@ struct NarrativeTestView: View {
     let playerOverride: Player?
     @StateObject private var viewModel: NarrativeTestViewModel
     @State private var showModelAlert = false
+    @State private var showOnboarding = false
     @State private var hasTriggeredStart = false
 
     init(startMode: NarrativeStartMode = .newGame, playerOverride: Player? = nil) {
@@ -107,6 +108,20 @@ struct NarrativeTestView: View {
                         .padding(.horizontal, 16)
                     }
 
+                    if case .victory(let summary) = viewModel.state {
+                        VictoryView(summary: summary) {
+                            viewModel.handleQuestCompleteContinue()
+                        }
+                        .padding(.horizontal, 16)
+                    }
+
+                    if case .questFailed(let summary) = viewModel.state {
+                        QuestFailedView(summary: summary) {
+                            viewModel.handleQuestCompleteContinue()
+                        }
+                        .padding(.horizontal, 16)
+                    }
+
                     if viewModel.state == .levelUp {
                         LevelUpView(
                             player: $viewModel.player,
@@ -187,7 +202,7 @@ struct NarrativeTestView: View {
                     
                     // History Count
                     if viewModel.storyHistory.count > 0 {
-                        Text("Turn \(viewModel.storyHistory.count) of 8")
+                        Text("Turn \(viewModel.storyHistory.count) of 9")
                             .font(.fantasyCaption)
                             .foregroundColor(.textMuted)
                     }
@@ -195,11 +210,15 @@ struct NarrativeTestView: View {
                 .padding(.bottom, 40)
             }
         }
+        .overlay(
+            OnboardingOverlay(isVisible: $showOnboarding)
+        )
         .onAppear {
             StartupDiagnostics.mark("NarrativeTestView onAppear")
             viewModel.checkFoundationModelAvailability()
             guard !hasTriggeredStart else { return }
             hasTriggeredStart = true
+            showOnboarding = !UserDefaults.standard.bool(forKey: "onboarding.dismissed")
             if startMode == .newGame {
                 StartupDiagnostics.mark("NarrativeTestView triggering initial startNewGame")
                 viewModel.startNewGame(resetPlayer: true)
@@ -319,6 +338,8 @@ struct NarrativeTestView: View {
             case combat
             case combatRewards(xp: Int, rewards: [String])
             case levelUp
+            case victory(String)
+            case questFailed(String)
             case gameOver(String)
             case loading
             case error(String)
@@ -329,6 +350,10 @@ struct NarrativeTestView: View {
                     return true
                 case (.levelUp, .levelUp):
                     return true
+                case (.victory(let a), .victory(let b)):
+                    return a == b
+                case (.questFailed(let a), .questFailed(let b)):
+                    return a == b
                 case (.combatRewards(let x1, let r1), .combatRewards(let x2, let r2)):
                     return x1 == x2 && r1 == r2
                 case (.error(let a), .error(let b)):
@@ -350,7 +375,11 @@ struct NarrativeTestView: View {
         @Published var player: Player
         @Published var progression: ProgressionState
         @Published var combatState: CombatState?
+        private let runCompletionTurn = 9
         private let defaultPlayer: Player
+        private var pendingCompletionOutcome: QuestOutcome?
+        private var pendingCompletionTitle: String = ""
+        private var pendingCompletionSummary: String = ""
         
         // Context for next story generation during resolution phase
         private struct PendingResolution {
@@ -365,6 +394,7 @@ struct NarrativeTestView: View {
         
         private let orchestrator = NarrativeOrchestrator()
         private let dataService = DataService.shared
+        private let campaignService = CampaignService.shared
         private var currentGameData: GameData?
         
         init(playerOverride: Player? = nil) {
@@ -430,12 +460,27 @@ struct NarrativeTestView: View {
                 if player.hp <= 0 {
                     player.hp = player.maxHP
                 }
+                applyDerivedStats()
                 
                 do {
-                    let story = try await orchestrator.startNewGame(player: player, turnNumber: 1)
+                    if currentGameData == nil {
+                        currentGameData = dataService.saveGame(player: player)
+                    } else if let gameData = currentGameData {
+                        dataService.updateGame(gameData, player: player)
+                    }
+
+                    if let gameData = currentGameData {
+                        await campaignService.ensureCampaignData(for: gameData)
+                        campaignService.startActiveQuestIfNeeded(for: gameData)
+                    }
+
+                    let story = try await orchestrator.startNewGame(
+                        player: player,
+                        turnNumber: 1,
+                        campaignContext: campaignPromptContext()
+                    )
                     currentStory = story
                     storyHistory = [story]
-                    currentGameData = dataService.saveGame(player: player)
                     if let gameData = currentGameData {
                         dataService.appendStory(to: gameData, scene: story.sceneDescription, choice: nil)
                         dataService.saveProgressionState(progression, to: gameData)
@@ -465,7 +510,11 @@ struct NarrativeTestView: View {
                         let rollResult = DiceRoller.roll(.d20, bonus: modifier)
                         
                         // 3. Resolve Outcome (Deterministic & Immediate)
-                        let (hpChange, dc, outcome) = orchestrator.resolveAction(rollResult: rollResult)
+                        let (hpChange, dc, outcome) = orchestrator.resolveAction(
+                            rollResult: rollResult,
+                            ability: rollType,
+                            player: player
+                        )
                         
                         // 4. Apply Consequence Immediately
                         player.hp = max(0, player.hp + hpChange)
@@ -491,7 +540,8 @@ struct NarrativeTestView: View {
                         let story = try await orchestrator.processPlayerChoice(
                             choice: choice,
                             player: player,
-                            turnNumber: nextTurnNumber
+                            turnNumber: nextTurnNumber,
+                            campaignContext: campaignPromptContext()
                         )
                         currentStory = story
                         storyHistory.append(story)
@@ -521,7 +571,8 @@ struct NarrativeTestView: View {
                         rollResult: resolution.rollResult,
                         dc: resolution.dc,
                         hpChange: resolution.hpChange,
-                        outcomeDescription: resolution.outcome ? "action succeeded" : "action failed"
+                        outcomeDescription: resolution.outcome ? "action succeeded" : "action failed",
+                        campaignContext: campaignPromptContext()
                     )
                 
                     
@@ -546,7 +597,7 @@ struct NarrativeTestView: View {
                 return
             }
 
-            if story.isCombat == true {
+            if story.isCombat == true, shouldEnterCombat(for: story) {
                 if combatState == nil {
                     combatState = buildCombatState(turnNumber: storyHistory.count)
                 }
@@ -556,6 +607,22 @@ struct NarrativeTestView: View {
             }
 
             combatState = nil
+            if shouldCompleteRun(with: story) {
+                let outcome = questOutcome(from: story.questOutcome) ?? .failure
+                pendingCompletionOutcome = outcome
+                pendingCompletionTitle = buildQuestTitle(from: story)
+                pendingCompletionSummary = String(story.sceneDescription.prefix(120))
+                switch outcome {
+                case .success:
+                    state = .victory("You have completed the quest and proven your legend.")
+                    persistRunState(phase: .victory, questOutcome: .success)
+                case .failure, .inProgress:
+                    state = .questFailed("The quest slips from your grasp, but new paths still await.")
+                    persistRunState(phase: .questFailed, questOutcome: .failure)
+                }
+                return
+            }
+
             state = .sceneDisplay
             persistRunState(phase: .narrative, questOutcome: questOutcome(from: story.questOutcome))
         }
@@ -600,9 +667,32 @@ struct NarrativeTestView: View {
         }
 
         func handleLevelUpConfirm() {
+            applyDerivedStats()
             persistPlayerState()
             persistProgressionState()
             continueAfterCombat(choice: "Empowered by growth, the hero presses onward.")
+        }
+
+        func handleQuestCompleteContinue() {
+            if
+                let gameData = currentGameData,
+                let outcome = pendingCompletionOutcome,
+                !pendingCompletionTitle.isEmpty
+            {
+                campaignService.completeActiveQuest(
+                    for: gameData,
+                    outcome: outcome,
+                    title: pendingCompletionTitle,
+                    summary: pendingCompletionSummary,
+                    wisdomModifier: max(0, player.abilityModifier(for: .wisdom))
+                )
+            }
+            applyQuestRecovery()
+            pendingCompletionOutcome = nil
+            pendingCompletionTitle = ""
+            pendingCompletionSummary = ""
+            state = .sceneDisplay
+            startNewGame(resetPlayer: false)
         }
 
         private func continueAfterCombat(choice: String) {
@@ -613,7 +703,8 @@ struct NarrativeTestView: View {
                     let story = try await orchestrator.processPlayerChoice(
                         choice: choice,
                         player: player,
-                        turnNumber: nextTurnNumber
+                        turnNumber: nextTurnNumber,
+                        campaignContext: campaignPromptContext()
                     )
                     currentStory = story
                     storyHistory.append(story)
@@ -673,6 +764,16 @@ struct NarrativeTestView: View {
                 activeEnemy: activeEnemy
             )
             dataService.saveRunState(runState, combatState: combatState, progressionState: progression, to: gameData)
+        }
+
+        private func shouldCompleteRun(with story: StoryResponse) -> Bool {
+            if storyHistory.count < runCompletionTurn {
+                return false
+            }
+            if let outcome = questOutcome(from: story.questOutcome) {
+                return outcome == .success || outcome == .failure
+            }
+            return true
         }
 
         private func persistProgressionState() {
@@ -743,6 +844,81 @@ struct NarrativeTestView: View {
                 return ["Relic Shard"]
             } else {
                 return ["Silver Charm"]
+            }
+        }
+
+        private func buildQuestTitle(from story: StoryResponse) -> String {
+            let words = story.sceneDescription
+                .split(separator: " ")
+                .prefix(4)
+                .map(String.init)
+            let candidate = words.joined(separator: " ")
+            return candidate.isEmpty ? "Unnamed Quest" : candidate
+        }
+
+        private func shouldEnterCombat(for story: StoryResponse) -> Bool {
+            guard let gameData = currentGameData else { return story.isCombat == true }
+            guard let quest = campaignService.activeQuest(for: gameData) else { return story.isCombat == true }
+            let turn = storyHistory.count
+
+            if quest.isBossQuest {
+                return turn >= 7
+            }
+
+            switch quest.questType {
+            case .combat:
+                return turn >= 6
+            case .survival, .travelHazard, .infiltration:
+                return turn >= 8
+            case .investigation, .social, .moralChoice:
+                return false
+            }
+        }
+
+        private func applyDerivedStats() {
+            let oldMax = player.maxHP
+            let conBonus = max(0, player.abilityModifier(for: .constitution) * 3)
+            let newMax = Player.defaultMaxHP + conBonus
+            player.maxHP = newMax
+            player.hp = min(newMax, player.hp + max(0, newMax - oldMax))
+        }
+
+        private func applyQuestRecovery() {
+            let conRecovery = 3 + max(0, player.abilityModifier(for: .constitution))
+            player.hp = min(player.maxHP, player.hp + conRecovery)
+        }
+
+        private func campaignPromptContext() -> String {
+            guard let gameData = currentGameData else {
+                return "- campaign: none"
+            }
+
+            let runtime = campaignService.runtimeState(for: gameData)
+            let activeQuest = campaignService.activeQuest(for: gameData)
+            let hooks = runtime.hooks.prefix(2).joined(separator: ", ")
+            let compactSummary = runtime.lastQuestSummary.isEmpty
+                ? "none"
+                : String(runtime.lastQuestSummary.prefix(120))
+            let previous = runtime.previousQuestOutcome?.rawValue ?? "none"
+            let questType = activeQuest?.questType.rawValue ?? "unknown"
+            let combatAllowed = activeQuest.map {
+                $0.isBossQuest || $0.questType == .combat || $0.questType == .survival || $0.questType == .travelHazard || $0.questType == .infiltration
+            } ?? true
+            let bossQuest = activeQuest?.isBossQuest ?? false
+
+            return """
+            - campaign: {index: \(runtime.activeCampaignIndex), quest: \(runtime.activeQuestIndex), act: \(actForQuest(runtime.activeQuestIndex)), quest_type: "\(questType)", combat_allowed: \(combatAllowed), boss_quest: \(bossQuest), threat: \(runtime.threatLevel), boss_phase: \(runtime.bossPhase), factions: "\(runtime.factionStateCompact)", previous_outcome: \(previous), hooks: [\(hooks)], last_summary: "\(compactSummary)"}
+            """
+        }
+
+        private func actForQuest(_ questIndex: Int) -> Int {
+            switch questIndex {
+            case 1...3:
+                return 1
+            case 4...6:
+                return 2
+            default:
+                return 3
             }
         }
         
