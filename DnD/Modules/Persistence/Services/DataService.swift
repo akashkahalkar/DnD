@@ -15,7 +15,10 @@ class DataService {
                 StoryEntry.self,
                 RunStateData.self,
                 CombatStateData.self,
-                ProgressionStateData.self
+                ProgressionStateData.self,
+                CampaignProgressData.self,
+                QuestProgressData.self,
+                CampaignRuntimeStateData.self
             )
             context = container.mainContext
         } catch {
@@ -187,6 +190,130 @@ class DataService {
             unspentAbilityPoints: gameData.unspentAbilityPoints,
             inventory: gameData.inventory
         )
+    }
+
+    func clearAllSaves() {
+        let descriptor = FetchDescriptor<GameData>()
+        if let games = try? context.fetch(descriptor) {
+            for game in games {
+                context.delete(game)
+            }
+            try? context.save()
+        }
+    }
+
+    func loadCampaignProgress(from gameData: GameData) -> [CampaignProgress] {
+        gameData.campaignProgress
+            .sorted(by: { $0.campaignIndex < $1.campaignIndex })
+            .map { campaign in
+                CampaignProgress(
+                    campaignIndex: campaign.campaignIndex,
+                    seedTitle: campaign.seedTitle,
+                    isUnlocked: campaign.isUnlocked,
+                    isCompleted: campaign.isCompleted,
+                    quests: campaign.quests
+                        .sorted(by: { $0.questIndex < $1.questIndex })
+                        .map { quest in
+                            QuestProgress(
+                                questIndex: quest.questIndex,
+                                status: QuestStatus(rawValue: quest.statusRaw) ?? .locked,
+                                questType: QuestType(rawValue: quest.questTypeRaw) ?? .investigation,
+                                title: quest.title,
+                                summary: quest.summary,
+                                outcome: quest.outcomeRaw.flatMap { QuestOutcome(rawValue: $0) },
+                                isBossQuest: quest.isBossQuest
+                            )
+                        }
+                )
+            }
+    }
+
+    func saveCampaignProgress(_ campaigns: [CampaignProgress], to gameData: GameData) {
+        var byIndex = Dictionary(uniqueKeysWithValues: gameData.campaignProgress.map { ($0.campaignIndex, $0) })
+
+        for campaign in campaigns {
+            let target = byIndex[campaign.campaignIndex] ?? {
+                let created = CampaignProgressData(
+                    campaignIndex: campaign.campaignIndex,
+                    seedTitle: campaign.seedTitle,
+                    isUnlocked: campaign.isUnlocked,
+                    isCompleted: campaign.isCompleted
+                )
+                gameData.campaignProgress.append(created)
+                byIndex[campaign.campaignIndex] = created
+                return created
+            }()
+
+            target.seedTitle = campaign.seedTitle
+            target.isUnlocked = campaign.isUnlocked
+            target.isCompleted = campaign.isCompleted
+
+            var questByIndex = Dictionary(uniqueKeysWithValues: target.quests.map { ($0.questIndex, $0) })
+            for quest in campaign.quests {
+                let qTarget = questByIndex[quest.questIndex] ?? {
+                    let created = QuestProgressData(
+                        questIndex: quest.questIndex,
+                        statusRaw: quest.status.rawValue,
+                        questTypeRaw: quest.questType.rawValue,
+                        title: quest.title,
+                        summary: quest.summary,
+                        outcomeRaw: quest.outcome?.rawValue,
+                        isBossQuest: quest.isBossQuest
+                    )
+                    target.quests.append(created)
+                    questByIndex[quest.questIndex] = created
+                    return created
+                }()
+
+                qTarget.statusRaw = quest.status.rawValue
+                qTarget.questTypeRaw = quest.questType.rawValue
+                qTarget.title = quest.title
+                qTarget.summary = quest.summary
+                qTarget.outcomeRaw = quest.outcome?.rawValue
+                qTarget.isBossQuest = quest.isBossQuest
+            }
+        }
+
+        try? context.save()
+    }
+
+    func loadCampaignRuntimeState(from gameData: GameData) -> CampaignRuntimeState? {
+        guard let runtime = gameData.campaignRuntimeState else { return nil }
+        return CampaignRuntimeState(
+            activeCampaignIndex: runtime.activeCampaignIndex,
+            activeQuestIndex: runtime.activeQuestIndex,
+            threatLevel: runtime.threatLevel,
+            bossPhase: runtime.bossPhase,
+            factionStateCompact: runtime.factionStateCompact,
+            hooks: runtime.hooks,
+            lastQuestSummary: runtime.lastQuestSummary,
+            previousQuestOutcome: runtime.previousQuestOutcomeRaw.flatMap { QuestOutcome(rawValue: $0) }
+        )
+    }
+
+    func saveCampaignRuntimeState(_ runtimeState: CampaignRuntimeState, to gameData: GameData) {
+        if let existing = gameData.campaignRuntimeState {
+            existing.activeCampaignIndex = runtimeState.activeCampaignIndex
+            existing.activeQuestIndex = runtimeState.activeQuestIndex
+            existing.threatLevel = runtimeState.threatLevel
+            existing.bossPhase = runtimeState.bossPhase
+            existing.factionStateCompact = runtimeState.factionStateCompact
+            existing.hooks = runtimeState.hooks
+            existing.lastQuestSummary = runtimeState.lastQuestSummary
+            existing.previousQuestOutcomeRaw = runtimeState.previousQuestOutcome?.rawValue
+        } else {
+            gameData.campaignRuntimeState = CampaignRuntimeStateData(
+                activeCampaignIndex: runtimeState.activeCampaignIndex,
+                activeQuestIndex: runtimeState.activeQuestIndex,
+                threatLevel: runtimeState.threatLevel,
+                bossPhase: runtimeState.bossPhase,
+                factionStateCompact: runtimeState.factionStateCompact,
+                hooks: runtimeState.hooks,
+                lastQuestSummary: runtimeState.lastQuestSummary,
+                previousQuestOutcomeRaw: runtimeState.previousQuestOutcome?.rawValue
+            )
+        }
+        try? context.save()
     }
 
     private func updateEnemyFields(in runStateData: RunStateData, enemy: Enemy?) {
