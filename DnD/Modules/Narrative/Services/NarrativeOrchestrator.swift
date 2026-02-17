@@ -4,18 +4,20 @@ class NarrativeOrchestrator {
     private let aiClient: AIClientProtocol
     private(set) var currentStory: StoryResponse?
     
+    @available(iOS 26.0, *)
     init(aiClient: AIClientProtocol = LLMClient()) {
         self.aiClient = aiClient
     }
     
-    func startNewGame(player: Player, turnNumber: Int = 1) async throws -> StoryResponse {
+    func startNewGame(player: Player, turnNumber: Int = 1, campaignContext: String = "") async throws -> StoryResponse {
         aiClient.resetSession()
         
         let prompt = """
         GAME_CONTEXT
         - phase: mission_start
         \(buildPlayerContext(player: player))
-        - turn: \(turnNumber)/8
+        \(campaignContext)
+        - turn: \(turnNumber)/9
         
         TASK
         - Start a short dark-fantasy quest.
@@ -29,19 +31,21 @@ class NarrativeOrchestrator {
         return response
     }
     
-    func processPlayerChoice(choice: String, player: Player, turnNumber: Int) async throws -> StoryResponse {
+    func processPlayerChoice(choice: String, player: Player, turnNumber: Int, campaignContext: String = "") async throws -> StoryResponse {
         let phase = determinePhase(turn: turnNumber)
         let prompt = """
         GAME_CONTEXT
         - phase: \(phase)
         \(buildPlayerContext(player: player))
-        - turn: \(turnNumber)/8
+        \(campaignContext)
+        - turn: \(turnNumber)/9
         \(buildPreviousStoryContext())
         - choice: \(quoted(choice))
         
         TASK
         - Continue the story.
         \(phaseTaskInstructions(phase: phase))
+        - Respect campaign context directives (quest_type/combat_allowed/boss_quest).
         """
         
         var response = try await aiClient.generateStory(prompt: prompt)
@@ -52,8 +56,18 @@ class NarrativeOrchestrator {
     
     /// Determines the outcome of a roll without generating the story yet.
     /// This allows the UI to show the result immediately.
-    func resolveAction(rollResult: DiceResult) -> (hpChange: Int, dc: Int, outcome: Bool) {
-        let dc = Int.random(in: 10...20)
+    func resolveAction(
+        rollResult: DiceResult,
+        ability: String? = nil,
+        player: Player? = nil
+    ) -> (hpChange: Int, dc: Int, outcome: Bool) {
+        var dc = Int.random(in: 10...20)
+        if ability?.lowercased() == Ability.charisma.rawValue {
+            dc = max(8, dc - 2)
+        }
+        if ability?.lowercased() == Ability.wisdom.rawValue, let player {
+            dc = max(8, dc - max(0, player.abilityModifier(for: .wisdom)))
+        }
         let isSuccess = rollResult.total >= dc
         let hpChange: Int
         hpChange = isSuccess ? 0 : -5
@@ -68,7 +82,8 @@ class NarrativeOrchestrator {
         rollResult: DiceResult,
         dc: Int,
         hpChange: Int,
-        outcomeDescription: String
+        outcomeDescription: String,
+        campaignContext: String = ""
     ) async throws -> StoryResponse {
         let phase = determinePhase(turn: turnNumber)
         let rollOutcome = hpChange < 0 ? "damage_\(abs(hpChange))" : "no_damage"
@@ -77,7 +92,8 @@ class NarrativeOrchestrator {
         GAME_CONTEXT
         - phase: \(phase) (post_roll)
         \(buildPlayerContext(player: player))
-        - turn: \(turnNumber)/8
+        \(campaignContext)
+        - turn: \(turnNumber)/9
         \(buildPreviousStoryContext())
         - choice: \(quoted(choice))
         - roll: {d20: \(rollResult.roll), total: \(rollResult.total), dc: \(dc), outcome: \(quoted(outcomeDescription)), consequence: \(rollOutcome)}
@@ -85,6 +101,7 @@ class NarrativeOrchestrator {
         TASK
         - Continue story with roll results.
         \(phaseTaskInstructions(phase: phase))
+        - Respect campaign context directives (quest_type/combat_allowed/boss_quest).
         """
         
         var response = try await aiClient.generateStory(prompt: prompt)
@@ -109,7 +126,8 @@ class NarrativeOrchestrator {
             rollResult: rollResult,
             dc: dc,
             hpChange: hpChange,
-            outcomeDescription: outcomeDescription
+            outcomeDescription: outcomeDescription,
+            campaignContext: ""
         )
         return (story, hpChange, dc)
     }
@@ -144,8 +162,9 @@ class NarrativeOrchestrator {
             return "- Focus on atmosphere and buildup. No combat."
         case "final_encounter_buildup":
             return """
-            - FORCE A CONFRONTATION (is_combat=true).
-            - If player was cautious, it MUST be an AMBUSH or INESCAPABLE TRAP. If aggressive, it's a boss fight.
+            - If combat_allowed=true, set is_combat=true and create confrontation pressure.
+            - If combat_allowed=false, keep is_combat=false and resolve without battle.
+            - If boss_quest=true, confrontation should involve boss pressure.
             - quest_outcome should remain in_progress.
             """
         case "resolution":
@@ -162,7 +181,7 @@ class NarrativeOrchestrator {
         var xp = 10
         
         // Bonus/Penalty at the end
-        if turn >= 8 {
+        if turn >= 9 {
             if outcome == "success" {
                 xp += 100
             } else if outcome == "failure" {
