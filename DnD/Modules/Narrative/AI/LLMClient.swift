@@ -16,44 +16,69 @@ enum LLMError: Error {
     case decodingError(String)
 }
 
+@available(iOS 26.0, *)
 class LLMClient: AIClientProtocol {
     
-    private var session: Any? // Will be LanguageModelSession on iOS 26+
-    
+    private var session: LanguageModelSession? // Will be LanguageModelSession on iOS 26+
+
     func resetSession() {
         session = nil
         StartupDiagnostics.mark("AI session reset")
+    }
+
+    func generateCampaignSeeds(count: Int = 6) async -> [String] {
+        let fallback = fallbackCampaignSeeds()
+#if canImport(FoundationModels)
+        do {
+            let model = SystemLanguageModel()
+            let localSession = LanguageModelSession(
+                model: model,
+                instructions: """
+                    Generate concise dark-fantasy campaign seed titles.
+                    Return short titles only.
+                    """
+            )
+
+            let response: LanguageModelSession.Response<GuidedCampaignSeeds> = try await localSession.respond(
+                to: "Generate exactly \(count) unique campaign seed titles.",
+                generating: GuidedCampaignSeeds.self,
+                includeSchemaInPrompt: true
+            )
+
+            let cleaned = response.content.seeds
+                .map { $0.trimmingCharacters(in: .whitespacesAndNewlines) }
+                .filter { !$0.isEmpty }
+            if cleaned.count >= count {
+                return Array(cleaned.prefix(count))
+            }
+        } catch {
+            StartupDiagnostics.mark("Campaign seed generation failed: \(error.localizedDescription)")
+        }
+#endif
+
+        return Array(fallback.prefix(count))
     }
     
     func generateStory(prompt: String) async throws -> StoryResponse {
         let requestStart = ProcessInfo.processInfo.systemUptime
         StartupDiagnostics.mark("generateStory called")
-        // Check if Foundation Models are available (iOS 26+)
-        if #available(iOS 26.0, *) {
-            #if canImport(FoundationModels)
-            StartupDiagnostics.mark("generateStory using Foundation Model")
-            let response = try await generateWithFoundationModel(prompt: prompt)
-            let elapsed = ProcessInfo.processInfo.systemUptime - requestStart
-            let formatted = String(format: "%.3f", elapsed)
-            StartupDiagnostics.mark("generateStory finished in \(formatted)s")
-            return response
-            #else
-            StartupDiagnostics.mark("generateStory using mock response (FoundationModels unavailable at compile time)")
-            let response = try await generateMockStory(prompt: prompt)
-            let elapsed = ProcessInfo.processInfo.systemUptime - requestStart
-            let formatted = String(format: "%.3f", elapsed)
-            StartupDiagnostics.mark("generateStory finished in \(formatted)s")
-            return response
-            #endif
-        } else {
-            // Fallback to mock for older iOS versions
-            StartupDiagnostics.mark("generateStory using mock response (iOS < 26)")
-            let response = try await generateMockStory(prompt: prompt)
-            let elapsed = ProcessInfo.processInfo.systemUptime - requestStart
-            let formatted = String(format: "%.3f", elapsed)
-            StartupDiagnostics.mark("generateStory finished in \(formatted)s")
-            return response
-        }
+            // Check if Foundation Models are available (iOS 26+)
+#if canImport(FoundationModels)
+        StartupDiagnostics.mark("generateStory using Foundation Model")
+        let response = try await generateWithFoundationModel(prompt: prompt)
+        let elapsed = ProcessInfo.processInfo.systemUptime - requestStart
+        let formatted = String(format: "%.3f", elapsed)
+        StartupDiagnostics.mark("generateStory finished in \(formatted)s")
+        return response
+#else
+        StartupDiagnostics.mark("generateStory using mock response (FoundationModels unavailable at compile time)")
+        let response = try await generateMockStory(prompt: prompt)
+        let elapsed = ProcessInfo.processInfo.systemUptime - requestStart
+        let formatted = String(format: "%.3f", elapsed)
+        StartupDiagnostics.mark("generateStory finished in \(formatted)s")
+        return response
+#endif
+        
     }
     
     // MARK: - Foundation Model Implementation (iOS 26+)
@@ -78,7 +103,7 @@ class LLMClient: AIClientProtocol {
             guard let languageSession = session as? LanguageModelSession else {
                 throw LLMError.modelUnavailable
             }
-            
+
             // Prompt carries per-turn context; session instructions define global behavior.
             let fullPrompt = buildDungeonMasterPrompt(userPrompt: prompt)
             
@@ -147,11 +172,12 @@ class LLMClient: AIClientProtocol {
     
     private func buildDungeonMasterInstructions() -> String {
         """
-        Expert DM for dark-fantasy RPG. Session is exactly 8 turns.
+        Expert DM for dark-fantasy RPG. Session is exactly 9 turns.
         - Give 3 choices.
         - requires_roll: nil by default. Use only for high stakes.
-        - Turn 7: FORCE a confrontation (is_combat=true). Use ambushes for cautious players.
-        - quest_outcome: Set 'success' or 'failure' at turn 8 based on story logic.
+        - Only set requires_roll for high-stakes actions with real risk; never for simple navigation.
+        - Turn 8: FORCE a confrontation (is_combat=true). Use ambushes for cautious players.
+        - quest_outcome: Set 'success' or 'failure' at turn 9 based on story logic.
         - Tone: Atmospheric, tactical.
         """
     }
@@ -256,6 +282,17 @@ class LLMClient: AIClientProtocol {
         let formatted = String(format: "%.3f", elapsed)
         StartupDiagnostics.mark("Mock story generation finished in \(formatted)s")
         return result
+    }
+
+    private func fallbackCampaignSeeds() -> [String] {
+        [
+            "Crimson Eclipse",
+            "Thornbound Oath",
+            "Ashen Crown",
+            "Veil of Cinders",
+            "Frostbound Sigil",
+            "Hollow Star"
+        ]
     }
     
     private func mockStartingScene() -> StoryResponse {
