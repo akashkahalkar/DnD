@@ -81,4 +81,10 @@ extension GuidedStoryResponse {
         )
     }
 }
+
+@available(iOS 26.0, *)
+@Generable
+struct GuidedCampaignSeeds {
+    var seeds: [String]
+}
 #endif
