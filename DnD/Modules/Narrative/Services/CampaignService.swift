@@ -8,7 +8,7 @@ final class CampaignService {
     private let dataService: DataService
     private let llmClient: LLMClient
 
-    init(dataService: DataService = .shared, llmClient: LLMClient = LLMClient()) {
+    init(dataService: DataService = .shared, llmClient: LLMClient = .shared) {
         self.dataService = dataService
         self.llmClient = llmClient
     }

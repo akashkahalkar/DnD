@@ -1,5 +1,8 @@
 import Combine
 import SwiftUI
+#if canImport(FoundationModels)
+import FoundationModels
+#endif
 
 struct NarrativeTestView: View {
     let startMode: NarrativeStartMode
@@ -202,7 +205,7 @@ struct NarrativeTestView: View {
                     
                     // History Count
                     if viewModel.storyHistory.count > 0 {
-                        Text("Turn \(viewModel.storyHistory.count) of 9")
+                        Text("Turn \(viewModel.storyHistory.count) of 5")
                             .font(.fantasyCaption)
                             .foregroundColor(.textMuted)
                     }
@@ -227,7 +230,7 @@ struct NarrativeTestView: View {
         .alert("Foundation Models Not Available", isPresented: $showModelAlert) {
             Button("OK", role: .cancel) { }
         } message: {
-            Text("Apple Foundation Models require iOS 26+ and a device with Apple Intelligence (iPhone 15 Pro or later). The app will use mock story responses for testing.")
+            Text("Foundation Models require iOS 26+ with Apple Intelligence, and a supported language/locale. The app will use mock story responses for testing.")
         }
     }
     
@@ -375,7 +378,7 @@ struct NarrativeTestView: View {
         @Published var player: Player
         @Published var progression: ProgressionState
         @Published var combatState: CombatState?
-        private let runCompletionTurn = 9
+        private let runCompletionTurn = 5
         private let defaultPlayer: Player
         private var pendingCompletionOutcome: QuestOutcome?
         private var pendingCompletionTitle: String = ""
@@ -435,7 +438,8 @@ struct NarrativeTestView: View {
             StartupDiagnostics.mark("Checking Foundation Models availability")
             if #available(iOS 26.0, *) {
 #if canImport(FoundationModels)
-                isFoundationModelAvailable = true
+                let supportedLanguages = SystemLanguageModel.default.supportedLanguages
+                isFoundationModelAvailable = supportedLanguages.contains(Locale.current.language)
 #else
                 isFoundationModelAvailable = false
 #endif

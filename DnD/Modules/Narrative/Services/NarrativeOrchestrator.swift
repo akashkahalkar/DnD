@@ -3,52 +3,62 @@ import Foundation
 class NarrativeOrchestrator {
     private let aiClient: AIClientProtocol
     private(set) var currentStory: StoryResponse?
+    private var activeQuestGoal: String?
     
     @available(iOS 26.0, *)
-    init(aiClient: AIClientProtocol = LLMClient()) {
+    init(aiClient: AIClientProtocol = LLMClient.shared) {
         self.aiClient = aiClient
     }
     
-    func startNewGame(player: Player, turnNumber: Int = 1, campaignContext: String = "") async throws -> StoryResponse {
+    func startNewGame(player: Player, turnNumber: Int = 1, campaignContext _: String = "") async throws -> StoryResponse {
         aiClient.resetSession()
+        activeQuestGoal = nil
         
+        let level = levelForTurn(turnNumber)
         let prompt = """
-        GAME_CONTEXT
-        - phase: mission_start
-        \(buildPlayerContext(player: player))
-        \(campaignContext)
-        - turn: \(turnNumber)/9
-        
-        TASK
-        - Start a short dark-fantasy quest.
-        - Introduce a clear objective or threat.
-        - No combat yet.
+        Create a dark-fantasy quest.
+        Keep language short and plain English.
+        This is level \(level) of 5.
+        Player HP: \(player.hp)/\(player.maxHP).
+        Define one clear end goal in one sentence as quest_goal.
+        Return exactly 2 choices.
+        Exactly one choice must be correct. Set correct_choice_index to 1 or 2.
+        Set quest_outcome to in_progress.
+        No combat in this opening scene.
         """
-        
         var response = try await aiClient.generateStory(prompt: prompt)
+        if let goal = normalizedGoal(from: response.questGoal) {
+            activeQuestGoal = goal
+        }
         response.xpChange = calculateDeterministicXP(turn: turnNumber, outcome: response.questOutcome)
         self.currentStory = response
         return response
     }
     
-    func processPlayerChoice(choice: String, player: Player, turnNumber: Int, campaignContext: String = "") async throws -> StoryResponse {
-        let phase = determinePhase(turn: turnNumber)
+    func processPlayerChoice(choice: String, player: Player, turnNumber: Int, campaignContext _: String = "") async throws -> StoryResponse {
+        let level = levelForTurn(turnNumber)
+        let goal = activeQuestGoal ?? normalizedGoal(from: currentStory?.questGoal) ?? "Complete the quest objective."
+        let correctness = selectedChoiceCorrectness(for: choice)
+        let outcomeRule = level < 5
+            ? "Set quest_outcome to in_progress."
+            : "Set quest_outcome to success or failure based on earlier choices. In scene_description, clearly say what objective was achieved or failed."
         let prompt = """
-        GAME_CONTEXT
-        - phase: \(phase)
-        \(buildPlayerContext(player: player))
-        \(campaignContext)
-        - turn: \(turnNumber)/9
-        \(buildPreviousStoryContext())
-        - choice: \(quoted(choice))
-        
-        TASK
-        - Continue the story.
-        \(phaseTaskInstructions(phase: phase))
-        - Respect campaign context directives (quest_type/combat_allowed/boss_quest).
+        Continue this quest in plain English.
+        Current level: \(level) of 5.
+        Player HP: \(player.hp)/\(player.maxHP).
+        End goal: \(quoted(goal))
+        Selected choice: \(quoted(choice))
+        Choice result: \(correctness)
+        If choice result is correct, progress toward the end goal.
+        If choice result is wrong, add setback and failure risk.
+        Return exactly 2 choices.
+        Exactly one choice must be correct. Set correct_choice_index to 1 or 2.
+        \(outcomeRule)
         """
-        
         var response = try await aiClient.generateStory(prompt: prompt)
+        if let goal = normalizedGoal(from: response.questGoal) {
+            activeQuestGoal = goal
+        }
         response.xpChange = calculateDeterministicXP(turn: turnNumber, outcome: response.questOutcome)
         self.currentStory = response
         return response
@@ -83,28 +93,35 @@ class NarrativeOrchestrator {
         dc: Int,
         hpChange: Int,
         outcomeDescription: String,
-        campaignContext: String = ""
+        campaignContext _: String = ""
     ) async throws -> StoryResponse {
-        let phase = determinePhase(turn: turnNumber)
+        let level = levelForTurn(turnNumber)
+        let goal = activeQuestGoal ?? normalizedGoal(from: currentStory?.questGoal) ?? "Complete the quest objective."
         let rollOutcome = hpChange < 0 ? "damage_\(abs(hpChange))" : "no_damage"
+        let sceneExcerpt = compact(currentStory?.sceneDescription ?? "", maxCharacters: 220)
+        let correctness = hpChange < 0 ? "wrong" : "correct"
+        let outcomeRule = level < 5
+            ? "Set quest_outcome to in_progress."
+            : "Set quest_outcome to success or failure based on earlier choices. In scene_description, clearly say what objective was achieved or failed."
         
         let prompt = """
-        GAME_CONTEXT
-        - phase: \(phase) (post_roll)
-        \(buildPlayerContext(player: player))
-        \(campaignContext)
-        - turn: \(turnNumber)/9
-        \(buildPreviousStoryContext())
-        - choice: \(quoted(choice))
-        - roll: {d20: \(rollResult.roll), total: \(rollResult.total), dc: \(dc), outcome: \(quoted(outcomeDescription)), consequence: \(rollOutcome)}
-        
-        TASK
-        - Continue story with roll results.
-        \(phaseTaskInstructions(phase: phase))
-        - Respect campaign context directives (quest_type/combat_allowed/boss_quest).
+        Continue this quest.
+        Current level: \(level) of 5.
+        Player HP: \(player.hp)/\(player.maxHP).
+        End goal: \(quoted(goal))
+        Current scene: \(quoted(sceneExcerpt.isEmpty ? "Unknown scene context." : sceneExcerpt))
+        Selected choice: \(quoted(choice))
+        Choice result: \(correctness)
+        If choice result is correct, progress toward the end goal.
+        If choice result is wrong, add setback and failure risk.
+        Return exactly 3 choices.
+        Exactly one choice must be correct. Set correct_choice_index to 1 or 2 or 3.
+        \(outcomeRule)
         """
-        
         var response = try await aiClient.generateStory(prompt: prompt)
+        if let goal = normalizedGoal(from: response.questGoal) {
+            activeQuestGoal = goal
+        }
         response.xpChange = calculateDeterministicXP(turn: turnNumber, outcome: response.questOutcome)
         self.currentStory = response
         return response
@@ -154,6 +171,25 @@ class NarrativeOrchestrator {
         if turn <= 7 { return "exploration" }
         if turn == 8 { return "final_encounter_buildup" }
         return "resolution"
+    }
+
+    private func levelForTurn(_ turn: Int) -> Int {
+        min(5, max(1, turn))
+    }
+
+    private func selectedChoiceCorrectness(for selectedChoice: String) -> String {
+        guard let story = currentStory,
+              let index = story.choices.firstIndex(of: selectedChoice),
+              let correctIndex = story.correctChoiceIndex else {
+            return "unknown"
+        }
+        return (index + 1) == correctIndex ? "correct" : "wrong"
+    }
+
+    private func normalizedGoal(from rawGoal: String?) -> String? {
+        guard let rawGoal else { return nil }
+        let trimmed = rawGoal.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
     }
     
     private func phaseTaskInstructions(phase: String) -> String {

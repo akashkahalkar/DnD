@@ -12,6 +12,8 @@ struct StoryResponse: Codable {
     let sceneDescription: String
     let npcDialogue: [NPCLine]
     let choices: [String]
+    let questGoal: String?
+    let correctChoiceIndex: Int?
     let requiresRoll: String? // "stealth", "strength", etc.
     let isCombat: Bool?
     var xpChange: Int?
@@ -21,6 +23,8 @@ struct StoryResponse: Codable {
         case sceneDescription = "scene_description"
         case npcDialogue = "npc_dialogue"
         case choices
+        case questGoal = "quest_goal"
+        case correctChoiceIndex = "correct_choice_index"
         case requiresRoll = "requires_roll"
         case isCombat = "is_combat"
         case questOutcome = "quest_outcome"
@@ -49,14 +53,20 @@ enum GuidedAbility: String {
 @available(iOS 26.0, *)
 @Generable(description: "Structured scene payload for the DnD narrative engine")
 struct GuidedStoryResponse {
-    @Guide(description: "A vivid dark-fantasy scene in 2-3 sentences")
+    @Guide(description: "A vivid fantasy scene, max 2 sentences")
     var sceneDescription: String
     
     @Guide(description: "0 to 2 NPC dialogue lines")
     var npcDialogue: [GuidedNPCLine]
     
-    @Guide(description: "Exactly 3 meaningful player choices", .count(3))
+    @Guide(description: "Exactly 3 choices only, one should move toward the goal", .count(2))
     var choices: [String]
+
+    @Guide(description: "Clear one-line end goal for this quest. Required on quest start; keep same goal on later turns.")
+    var questGoal: String?
+
+    @Guide(description: "1-based index of the correct choice (1 or 2 or 3)")
+    var correctChoiceIndex: Int?
     
     @Guide(description: "Use nil by default; only set for uncertain and high-stakes outcomes")
     var requiresRoll: GuidedAbility?
@@ -74,6 +84,8 @@ extension GuidedStoryResponse {
             sceneDescription: sceneDescription,
             npcDialogue: npcDialogue.map { NPCLine(speaker: $0.speaker, line: $0.line) },
             choices: choices,
+            questGoal: questGoal,
+            correctChoiceIndex: correctChoiceIndex,
             requiresRoll: requiresRoll?.rawValue,
             isCombat: isCombat,
             xpChange: nil, // To be filled by orchestrator

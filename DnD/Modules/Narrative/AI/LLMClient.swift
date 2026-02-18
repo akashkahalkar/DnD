@@ -18,7 +18,8 @@ enum LLMError: Error {
 
 @available(iOS 26.0, *)
 class LLMClient: AIClientProtocol {
-    
+    static let shared = LLMClient()
+
     private var session: LanguageModelSession? // Will be LanguageModelSession on iOS 26+
 
     func resetSession() {
@@ -29,6 +30,10 @@ class LLMClient: AIClientProtocol {
     func generateCampaignSeeds(count: Int = 6) async -> [String] {
         let fallback = fallbackCampaignSeeds()
 #if canImport(FoundationModels)
+        if #available(iOS 26.0, *), !isLocaleSupported() {
+            StartupDiagnostics.mark("Campaign seed generation skipped: unsupported language/locale")
+            return Array(fallback.prefix(count))
+        }
         do {
             let model = SystemLanguageModel()
             let localSession = LanguageModelSession(
@@ -62,8 +67,17 @@ class LLMClient: AIClientProtocol {
     func generateStory(prompt: String) async throws -> StoryResponse {
         let requestStart = ProcessInfo.processInfo.systemUptime
         StartupDiagnostics.mark("generateStory called")
+        logLocaleDiagnostics(prompt: prompt, label: "generateStory")
             // Check if Foundation Models are available (iOS 26+)
 #if canImport(FoundationModels)
+        if #available(iOS 26.0, *), !isLocaleSupported() {
+            StartupDiagnostics.mark("Foundation model skipped: unsupported language/locale")
+            let response = try await generateMockStory(prompt: prompt)
+            let elapsed = ProcessInfo.processInfo.systemUptime - requestStart
+            let formatted = String(format: "%.3f", elapsed)
+            StartupDiagnostics.mark("generateStory finished in \(formatted)s")
+            return response
+        }
         StartupDiagnostics.mark("generateStory using Foundation Model")
         let response = try await generateWithFoundationModel(prompt: prompt)
         let elapsed = ProcessInfo.processInfo.systemUptime - requestStart
@@ -83,82 +97,42 @@ class LLMClient: AIClientProtocol {
     
     // MARK: - Foundation Model Implementation (iOS 26+)
     
-    @available(iOS 26.0, *)
     private func generateWithFoundationModel(prompt: String) async throws -> StoryResponse {
         #if canImport(FoundationModels)
-        let operationStart = ProcessInfo.processInfo.systemUptime
+        let startTime = ProcessInfo.processInfo.systemUptime
         StartupDiagnostics.mark("Foundation model generation started")
+
         do {
-            // Access the system language model
             let model = SystemLanguageModel()
-            
-            // Create or reuse session for conversation context
+
+            // 1. Ensure session exists
             if session == nil {
-                session = LanguageModelSession(
-                    model: model,
-                    instructions: buildDungeonMasterInstructions()
-                )
-            }
-            
-            guard let languageSession = session as? LanguageModelSession else {
-                throw LLMError.modelUnavailable
+                session = LanguageModelSession(model: model, instructions: buildDungeonMasterInstructions())
             }
 
-            // Prompt carries per-turn context; session instructions define global behavior.
-            let fullPrompt = buildDungeonMasterPrompt(userPrompt: prompt)
-            
+            guard let currentSession = session else { throw LLMError.modelUnavailable }
+
+            // 2. Define a reusable generation closure to avoid repetition
+            let performGeneration = { (targetSession: LanguageModelSession) async throws -> LanguageModelSession.Response<GuidedStoryResponse> in
+                return try await targetSession.respond(
+                    to: prompt,
+                    generating: GuidedStoryResponse.self,
+                    options: GenerationOptions(temperature: 0.6)
+                )
+            }
+
             let response: LanguageModelSession.Response<GuidedStoryResponse>
             do {
-                response = try await languageSession.respond(
-                    to: fullPrompt,
-                    generating: GuidedStoryResponse.self,
-                    includeSchemaInPrompt: true
-                )
-            } catch let generationError as LanguageModelSession.GenerationError {
-                switch generationError {
-                case .exceededContextWindowSize(let context):
-                    StartupDiagnostics.mark("Foundation model context window exceeded: \(context.debugDescription)")
-                    logTranscriptDiagnostics(languageSession.transcript, label: "before trim")
-                    
-                    let trimmedSession = rebuildSessionWithTrimmedTranscript(
-                        from: languageSession,
-                        model: model,
-                        keepRecentNonInstructionEntries: 4
-                    )
-                    session = trimmedSession
-                    logTranscriptDiagnostics(trimmedSession.transcript, label: "after trim")
-                    
-                    do {
-                        response = try await trimmedSession.respond(
-                            to: fullPrompt,
-                            generating: GuidedStoryResponse.self,
-                            includeSchemaInPrompt: true
-                        )
-                    } catch {
-                        // If still failing, try a total reset (instructions only)
-                        StartupDiagnostics.mark("Context window still exceeded after trim. Total reset.")
-                        let resetSession = rebuildSessionWithTrimmedTranscript(
-                            from: languageSession,
-                            model: model,
-                            keepRecentNonInstructionEntries: 0
-                        )
-                        session = resetSession
-                        response = try await resetSession.respond(
-                            to: fullPrompt,
-                            generating: GuidedStoryResponse.self,
-                            includeSchemaInPrompt: true
-                        )
-                    }
-                default:
-                    throw generationError
-                }
+                response = try await performGeneration(currentSession)
+            } catch let error as LanguageModelSession.GenerationError {
+                response = try await handleGenerationError(error, model: model, prompt: prompt, originalSession: currentSession, retryAction: performGeneration)
             }
-            
-            let storyResponse = response.content.toStoryResponse()
-            let elapsed = ProcessInfo.processInfo.systemUptime - operationStart
-            let formatted = String(format: "%.3f", elapsed)
-            StartupDiagnostics.mark("Foundation model guided generation completed in \(formatted)s")
-            return storyResponse
+
+            let elapsed = String(format: "%.3f", ProcessInfo.processInfo.systemUptime - startTime)
+            StartupDiagnostics.mark("Foundation model guided generation completed in \(elapsed)s")
+
+            return response.content.toStoryResponse()
+
         } catch {
             StartupDiagnostics.mark("Foundation model error: \(error.localizedDescription). Falling back to mock")
             return try await generateMockStory(prompt: prompt)
@@ -167,26 +141,84 @@ class LLMClient: AIClientProtocol {
         return try await generateMockStory(prompt: prompt)
         #endif
     }
-    
+
+    /// Helper to handle context window issues specifically
+    private func handleGenerationError(
+        _ error: LanguageModelSession.GenerationError,
+        model: SystemLanguageModel,
+        prompt: String,
+        originalSession: LanguageModelSession,
+        retryAction: (LanguageModelSession) async throws -> LanguageModelSession.Response<GuidedStoryResponse>
+    ) async throws -> LanguageModelSession.Response<GuidedStoryResponse> {
+
+        switch error {
+        case .exceededContextWindowSize:
+            StartupDiagnostics.mark("Context window exceeded. Attempting trim...")
+
+            // Attempt 1: Trim partially
+            let trimmed = rebuildSessionWithTrimmedTranscript(from: originalSession, model: model, keepRecentNonInstructionEntries: 4)
+            self.session = trimmed
+
+            do {
+                return try await retryAction(trimmed)
+            } catch {
+                StartupDiagnostics.mark("Context still exceeded. Performing total reset.")
+                // Attempt 2: Total Reset
+                let reset = rebuildSessionWithTrimmedTranscript(from: originalSession, model: model, keepRecentNonInstructionEntries: 0)
+                self.session = reset
+                return try await retryAction(reset)
+            }
+
+        case .unsupportedLanguageOrLocale:
+            throw error // Caught by the outer block to trigger mock
+        default:
+            throw error
+        }
+    }
+
     // MARK: - Helper Methods
     
     private func buildDungeonMasterInstructions() -> String {
         """
-        Expert DM for dark-fantasy RPG. Session is exactly 9 turns.
-        - Give 3 choices.
-        - requires_roll: nil by default. Use only for high stakes.
-        - Only set requires_roll for high-stakes actions with real risk; never for simple navigation.
-        - Turn 8: FORCE a confrontation (is_combat=true). Use ambushes for cautious players.
-        - quest_outcome: Set 'success' or 'failure' at turn 9 based on story logic.
-        - Tone: Atmospheric, tactical.
+        You are a dark-fantasy dungeon master. Keep output short.
+        - Always return exactly 3 choices.
+        - Set correct_choice_index to 1 or 2 or 3.
+        - Include quest_goal on quest start and keep it consistent.
+        - quest_outcome must be one of: in_progress, success, failure.
+        - Keep scene_description short and focused on the current step.
         """
     }
-    
-    private func buildDungeonMasterPrompt(userPrompt: String) -> String {
-        return """
-        Generate the next story scene using this current game context:
-        \(userPrompt)
-        """
+
+    @available(iOS 26.0, *)
+    func prewarmStorySession(promptPrefix: String) async {
+        #if canImport(FoundationModels)
+        if !isLocaleSupported() {
+            StartupDiagnostics.mark("Prewarm skipped: unsupported language/locale")
+            return
+        }
+        let model = SystemLanguageModel()
+        if session == nil {
+            session = LanguageModelSession(
+                model: model,
+                instructions: buildDungeonMasterInstructions()
+            )
+        }
+        
+        let prompt = Prompt(promptPrefix)
+        session?.prewarm(promptPrefix: prompt)
+        StartupDiagnostics.mark("Foundation model session prewarmed")
+
+        #endif
+    }
+
+    @available(iOS 26.0, *)
+    private func isLocaleSupported() -> Bool {
+        #if canImport(FoundationModels)
+        let supportedLanguages = SystemLanguageModel.default.supportedLanguages
+        return supportedLanguages.contains(Locale.current.language)
+        #else
+        return false
+        #endif
     }
     
     @available(iOS 26.0, *)
@@ -260,6 +292,21 @@ class LLMClient: AIClientProtocol {
             "Transcript \(label): entries=\(transcript.count), approxChars=\(approxCharCount), instructions=\(instructionCount), prompts=\(promptCount), responses=\(responseCount), toolCalls=\(toolCallCount), toolOutput=\(toolOutputCount)"
         )
     }
+
+    private func logLocaleDiagnostics(prompt: String, label: String) {
+        let localeId = Locale.current.identifier
+        let language = Locale.current.language
+        let hasNonASCII = prompt.unicodeScalars.contains { $0.value > 127 }
+        let trimmed = prompt.trimmingCharacters(in: .whitespacesAndNewlines)
+        let head = String(trimmed.prefix(180))
+        let tail = String(trimmed.suffix(180))
+        StartupDiagnostics.mark(
+            "LocaleDiag[\(label)] locale=\(localeId), language=\(language), nonASCII=\(hasNonASCII), prompt_head=\(head)"
+        )
+        if tail != head {
+            StartupDiagnostics.mark("LocaleDiag[\(label)] prompt_tail=\(tail)")
+        }
+    }
     
     // MARK: - Mock Implementation (Fallback)
     
@@ -307,11 +354,13 @@ class LLMClient: AIClientProtocol {
           ],
           "choices": [
             "Accept the mysterious quest",
-            "Demand more information about the ruins",
             "Politely decline and order another drink"
           ],
+          "quest_goal": "Enter Shadowfen Ruins and retrieve the council seal.",
+          "correct_choice_index": 1,
           "requires_roll": null,
-          "is_combat": false
+          "is_combat": false,
+          "quest_outcome": "in_progress"
         }
         """
         
@@ -331,11 +380,13 @@ class LLMClient: AIClientProtocol {
           ],
           "choices": [
             "Cast a defensive spell and prepare for its breath attack",
-            "Attempt to reason with the ancient creature",
             "Signal Kael and coordinate a simultaneous strike"
           ],
+          "quest_goal": "Survive the dragon and seize the ember relic.",
+          "correct_choice_index": 2,
           "requires_roll": "charisma",
-          "is_combat": true
+          "is_combat": true,
+          "quest_outcome": "in_progress"
         }
         """
         
@@ -350,11 +401,13 @@ class LLMClient: AIClientProtocol {
           "npc_dialogue": [],
           "choices": [
             "Examine the glowing crystals more closely",
-            "Attempt to decipher the ancient runes",
             "Follow the sound of water deeper into the chamber"
           ],
+          "quest_goal": "Find the hidden spring and secure the moon key.",
+          "correct_choice_index": 1,
           "requires_roll": "intelligence",
-          "is_combat": false
+          "is_combat": false,
+          "quest_outcome": "in_progress"
         }
         """
         

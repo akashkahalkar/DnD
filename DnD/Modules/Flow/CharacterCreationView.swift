@@ -117,6 +117,16 @@ struct CharacterCreationView: View {
         }
         .navigationTitle("Character")
         .navigationBarTitleDisplayMode(.inline)
+        .task {
+            if #available(iOS 26.0, *) {
+                await LLMClient.shared.prewarmStorySession(
+                    promptPrefix: """
+                    Generate concise dark-fantasy campaign seed titles.
+                    Return short titles only.
+                    """
+                )
+            }
+        }
     }
 
     private func adjustAbility(_ ability: Ability, delta: Int) {
