@@ -16,7 +16,7 @@ struct HomeView: View {
             ScrollView {
                 VStack(spacing: 28) {
                     VStack(spacing: 12) {
-                        Text("DUNGEONS & DESTINY")
+                        Text("DUNGEONS & DRAGONS")
                             .font(.fantasyTitleLarge)
                             .foregroundColor(.accentGold)
                             .multilineTextAlignment(.center)
