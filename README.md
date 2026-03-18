@@ -17,3 +17,33 @@ The game follows a structured narrative loop mimicking a tabletop role-playing e
 
 - **SwiftUI**: Modern, dynamic user interface crafted for iOS.
 - **Foundation Models**: Utilizes on-device LLMs via `LanguageModelSession` for fast, localized, and private story generation.
+
+## Screenshots
+
+<table>
+  <tr>
+    <td align="center">
+      <img src="screenshots/home.PNG" width="220" alt="Home Screen" /><br/>
+      <em>Home Screen</em>
+    </td>
+    <td align="center">
+      <img src="screenshots/characterConfiguration.PNG" width="220" alt="Character Configuration" /><br/>
+      <em>Character Configuration</em>
+    </td>
+    <td align="center">
+      <img src="screenshots/genrationLoader.PNG" width="220" alt="Generation Loading" /><br/>
+      <em>Generation Loading</em>
+    </td>
+  </tr>
+  <tr>
+    <td align="center">
+      <img src="screenshots/storyGenerationView.PNG" width="220" alt="Story Generation View" /><br/>
+      <em>Story Generation View</em>
+    </td>
+    <td align="center">
+      <img src="screenshots/tileLineView.PNG" width="220" alt="Timeline View" /><br/>
+      <em>Timeline View</em>
+    </td>
+    <td></td> <!-- empty cell for alignment -->
+  </tr>
+</table>
