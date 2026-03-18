@@ -1,4 +1,4 @@
-# DnD
+# DnD (Generative Dungeons and Dragons)
 
 An AI-powered Dungeons & Dragons iOS application that acts as your personal Dungeon Master. It leverages Apple's on-device Foundation Models to dynamically generate dark-fantasy adventures, complete with engaging NPC dialogue, immersive scenes, and meaningful player choices.
 
